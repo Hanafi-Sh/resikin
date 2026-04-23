@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, CheckCircle2, Clock, AlertCircle, Truck, ClipboardCheck, XCircle, ArrowRight, Leaf } from 'lucide-react';
+import { Search, CheckCircle2, Clock, AlertCircle, Truck, ClipboardCheck, XCircle, ArrowRight, ArrowLeft, Leaf } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -127,6 +127,19 @@ function TrackingContent() {
         {/* Results */}
         {report && (
           <div className="animate-fade-in-up space-y-6">
+            {/* Back Button */}
+            <button 
+              onClick={() => {
+                setReport(null);
+                setSearched(false);
+                setCode('');
+              }}
+              className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-emerald-600 transition-colors mb-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Kembali ke Daftar Laporan
+            </button>
+
             {/* Report Summary */}
             <Card className="p-6">
               <div className="flex items-start justify-between mb-4">
