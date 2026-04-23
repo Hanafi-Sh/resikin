@@ -1,18 +1,43 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Menu, X, Leaf } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Menu, X, Leaf, LogOut, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS, APP_CONFIG } from '@/lib/constants';
 import Button from '@/components/ui/Button';
+import { createClient } from '@/lib/supabase/client';
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState(null);
   const pathname = usePathname();
+  const router = useRouter();
 
   const navItems = NAV_ITEMS.public;
+
+  useEffect(() => {
+    const supabase = createClient();
+    
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/');
+  };
 
   return (
     <header className="sticky top-0 z-50 glass border-b border-slate-200/50">
@@ -48,9 +73,18 @@ export default function Navbar() {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="ghost" size="sm">Masuk</Button>
-            </Link>
+            {user ? (
+              <>
+                <Link href="/dashboard">
+                  <Button variant="outline" size="sm" icon={LayoutDashboard}>Dashboard</Button>
+                </Link>
+                <Button variant="ghost" size="sm" onClick={handleLogout} icon={LogOut}>Keluar</Button>
+              </>
+            ) : (
+              <Link href="/login">
+                <Button variant="ghost" size="sm">Masuk</Button>
+              </Link>
+            )}
             <Link href="/lapor">
               <Button size="sm">Laporkan Sekarang</Button>
             </Link>
@@ -86,9 +120,18 @@ export default function Navbar() {
                 </Link>
               ))}
               <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-100">
-                <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
-                  <Button variant="secondary" size="sm" className="w-full">Masuk</Button>
-                </Link>
+                {user ? (
+                  <>
+                    <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
+                      <Button variant="secondary" size="sm" className="w-full" icon={LayoutDashboard}>Dashboard</Button>
+                    </Link>
+                    <Button variant="ghost" size="sm" className="w-full" onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }} icon={LogOut}>Keluar</Button>
+                  </>
+                ) : (
+                  <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
+                    <Button variant="secondary" size="sm" className="w-full">Masuk</Button>
+                  </Link>
+                )}
                 <Link href="/lapor" onClick={() => setIsMobileMenuOpen(false)}>
                   <Button size="sm" className="w-full">Laporkan Sekarang</Button>
                 </Link>
