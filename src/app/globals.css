@@ -255,3 +255,46 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--slate-400);
 }
+
+/* ============================================
+   Mobile Optimizations (< 768px)
+   Desktop is completely unaffected
+   ============================================ */
+
+/* Safe area bottom for bottom navigation */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (max-width: 767px) {
+  /* Touch-friendly tap targets */
+  button, a, input, select, textarea {
+    min-height: 44px;
+  }
+
+  /* Optimized mobile typography */
+  h1 { font-size: 1.75rem !important; }
+  h2 { font-size: 1.5rem !important; }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent horizontal overflow */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Hide footer on mobile (bottom nav replaces it) */
+  footer {
+    display: none;
+  }
+
+  /* Mobile card spacing */
+  .glass {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+}

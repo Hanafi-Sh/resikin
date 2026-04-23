@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Search, CheckCircle2, Clock, AlertCircle, Truck, ClipboardCheck, XCircle, ArrowRight, Leaf } from 'lucide-react';
 import Button from '@/components/ui/Button';
@@ -26,7 +26,7 @@ const STATUS_ORDER = [
   REPORT_STATUS.SELESAI,
 ];
 
-export default function TrackingPage() {
+function TrackingContent() {
   const searchParams = useSearchParams();
   const [code, setCode] = useState(searchParams.get('code') || '');
   const [report, setReport] = useState(null);
@@ -257,5 +257,20 @@ export default function TrackingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function TrackingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-[80vh] bg-slate-50 py-12">
+        <div className="max-w-2xl mx-auto px-4 text-center">
+          <h1 className="text-3xl font-bold text-slate-900">Lacak Laporan</h1>
+          <p className="text-slate-500 mt-2">Memuat...</p>
+        </div>
+      </div>
+    }>
+      <TrackingContent />
+    </Suspense>
   );
 }
