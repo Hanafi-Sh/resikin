@@ -10,22 +10,37 @@ import { createClient } from '@/lib/supabase/client';
 export default function MobileBottomNav() {
   const pathname = usePathname();
   const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
     const supabase = createClient();
     
+    // Function to fetch role
+    const fetchRole = async (userId) => {
+      const { data } = await supabase.from('users').select('role').eq('auth_user_id', userId).single();
+      if (data) setUserRole(data.role);
+    };
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user || null);
+      const currentUser = session?.user || null;
+      setUser(currentUser);
+      if (currentUser) fetchRole(currentUser.id);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+      const currentUser = session?.user || null;
+      setUser(currentUser);
+      if (currentUser) fetchRole(currentUser.id);
+      else setUserRole(null);
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Determine auth redirect path
+  const authPath = user ? (userRole === 'petugas' ? '/petugas' : '/dashboard') : '/login';
 
   // Base nav items
   const navItems = [
@@ -33,12 +48,8 @@ export default function MobileBottomNav() {
     { href: '/lapor', label: 'Lapor', icon: FileText },
     { href: '/tracking', label: 'Lacak', icon: Search },
     { href: '/info', label: 'Info', icon: Info },
-    { href: user ? '/dashboard' : '/login', label: 'Akun', icon: User },
+    { href: authPath, label: 'Akun', icon: User },
   ];
-
-  // Don't show on dashboard/petugas pages (they have their own nav)
-  const hiddenPaths = ['/dashboard', '/petugas'];
-  if (hiddenPaths.some(p => pathname.startsWith(p))) return null;
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-t border-slate-200 safe-area-bottom">
