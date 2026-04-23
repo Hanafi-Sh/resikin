@@ -33,15 +33,31 @@ function TrackingContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searched, setSearched] = useState(false);
+  const [recentReports, setRecentReports] = useState([]);
+  const [loadingRecent, setLoadingRecent] = useState(true);
 
-  // Auto-search if code in URL
+  // Fetch recent reports and Auto-search if code in URL
   useEffect(() => {
     const urlCode = searchParams.get('code');
     if (urlCode) {
       setCode(urlCode);
       handleSearch(urlCode);
     }
+    fetchRecentReports();
   }, []);
+
+  const fetchRecentReports = async () => {
+    setLoadingRecent(true);
+    try {
+      const res = await fetch('/api/public-reports?limit=5');
+      const data = await res.json();
+      if (res.ok) setRecentReports(data.reports || []);
+    } catch (err) {
+      console.error('Failed to fetch recent reports', err);
+    } finally {
+      setLoadingRecent(false);
+    }
+  };
 
   const handleSearch = async (searchCode) => {
     const trackingCode = (searchCode || code).trim().toUpperCase();
@@ -248,11 +264,75 @@ function TrackingContent() {
           </Card>
         )}
 
-        {/* Help Text */}
-        {!searched && (
-          <div className="text-center text-sm text-slate-400 mt-8">
-            <p>Nomor tracking diberikan saat Anda mengirim laporan.</p>
-            <p className="mt-1">Formatnya: <span className="font-mono text-slate-500">RSK-YYYYMMDD-NNN</span></p>
+        {/* Recent Reports / Transparency Section */}
+        {!report && (
+          <div className="mt-12 animate-fade-in-up">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Laporan Terbaru</h2>
+                <p className="text-sm text-slate-500">Transparansi penanganan sampah di kelurahan kita</p>
+              </div>
+            </div>
+
+            {loadingRecent ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map(i => (
+                  <Card key={i} className="p-5 animate-pulse flex gap-4">
+                    <div className="w-12 h-12 bg-slate-200 rounded-xl shrink-0" />
+                    <div className="flex-1 space-y-3 py-1">
+                      <div className="h-4 bg-slate-200 rounded w-1/3" />
+                      <div className="h-3 bg-slate-200 rounded w-2/3" />
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : recentReports.length > 0 ? (
+              <div className="space-y-4">
+                {recentReports.map(item => (
+                  <Card 
+                    key={item.id} 
+                    hover 
+                    className="p-5 cursor-pointer transition-all hover:border-emerald-200 group"
+                    onClick={() => {
+                      setCode(item.tracking_code);
+                      handleSearch(item.tracking_code);
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                            {item.tracking_code}
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            {formatDateTime(item.created_at)}
+                          </span>
+                        </div>
+                        <h3 className="font-semibold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                          {REPORT_CATEGORY_LABELS[item.category] || item.category}
+                        </h3>
+                        <p className="text-sm text-slate-500 mt-1 line-clamp-1">{item.description}</p>
+                        {item.address && (
+                          <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-400">
+                            <span className="shrink-0">📍</span>
+                            <span className="truncate">{item.address}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right flex flex-col items-end gap-2">
+                        <StatusBadge status={item.status} size="sm" />
+                        <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card className="p-8 text-center text-slate-500">
+                <Leaf className="w-8 h-8 mx-auto text-emerald-200 mb-2" />
+                <p>Belum ada laporan terbaru.</p>
+              </Card>
+            )}
           </div>
         )}
       </div>
