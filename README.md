@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# 🌿 ResikIn — Sistem Pelaporan & Koordinasi Sampah Kelurahan
 
-## Getting Started
+> Laporkan. Pantau. Bersihkan.
 
-First, run the development server:
+ResikIn adalah platform web untuk pelaporan dan koordinasi masalah sampah di tingkat kelurahan Kota Yogyakarta. Dibangun sebagai solusi atas masalah komunikasi yang tidak terstruktur antara warga, koordinator kelurahan, dan petugas lapangan DLH.
+
+## 🎯 Fitur Utama
+
+- **📝 Pelaporan Warga** — Form digital sederhana, tanpa perlu membuat akun
+- **🔍 Tracking Realtime** — Pantau status laporan dengan nomor tracking unik
+- **📊 Dashboard Koordinator** — Kelola semua laporan dari satu tempat
+- **👷 Panel Petugas** — Daftar tugas harian dengan navigasi lokasi
+- **🔔 Notifikasi Status** — Perubahan status tercatat dan dapat dilacak
+- **📋 Info Publik** — Pengumuman dan tips kebersihan
+
+## 🛠️ Tech Stack
+
+| Layer | Teknologi |
+|-------|-----------|
+| Frontend | Next.js 14+ (React) + Tailwind CSS |
+| Backend | Next.js API Routes |
+| Database | Supabase (PostgreSQL + Realtime) |
+| Auth | Supabase Auth |
+| Storage | Supabase Storage |
+| Maps | Leaflet.js + OpenStreetMap |
+| Deploy | Vercel |
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js 18+ dan npm
+- Akun [Supabase](https://supabase.com) (gratis)
+
+### Installation
 
 ```bash
+# 1. Clone repository
+git clone https://github.com/your-username/resikin.git
+cd resikin
+
+# 2. Install dependencies
+npm install
+
+# 3. Setup environment variables
+cp .env.local.example .env.local
+# Edit .env.local dan isi SUPABASE_URL + SUPABASE_ANON_KEY
+
+# 4. Setup database
+# Buka Supabase Dashboard → SQL Editor
+# Jalankan file: supabase/migrations/001_initial_schema.sql
+
+# 5. Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka [http://localhost:3000](http://localhost:3000) di browser.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## 📁 Struktur Folder
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/              # Halaman (App Router)
+│   ├── page.js       # Landing page
+│   ├── lapor/        # Form laporan
+│   ├── tracking/     # Tracking status
+│   ├── dashboard/    # Dashboard koordinator
+│   ├── petugas/      # Panel petugas
+│   └── api/          # API Routes
+├── components/       # Komponen reusable
+│   ├── ui/           # Button, Card, Badge, dll.
+│   ├── layout/       # Navbar, Footer
+│   ├── forms/        # Form components
+│   └── maps/         # Map components
+└── lib/              # Utilities & config
+    ├── supabase/     # Supabase clients
+    ├── constants.js  # Enums & constants
+    └── utils.js      # Helper functions
+```
 
-## Learn More
+## 👥 Tim
 
-To learn more about Next.js, take a look at the following resources:
+**Tim MyMusicFavoriteGueh** — OmahTI UGM Internship 2026
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| No | Nama | Role |
+|----|------|------|
+| 1 | *(isi)* | Project Manager & Product Owner |
+| 2 | *(isi)* | UI/UX Designer |
+| 3 | *(isi)* | Frontend Developer |
+| 4 | *(isi)* | Backend Developer |
+| 5 | *(isi)* | Fullstack Developer |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 📅 Timeline
 
-## Deploy on Vercel
+- **20 April** — Start
+- **30 April** — Mid-check (GitHub + SRS)
+- **7 Mei** — Final Submission (Video Demo)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📄 License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is built for the OmahTI UGM Internship 2026 competition.

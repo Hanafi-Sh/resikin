@@ -1,0 +1,26 @@
+{
+  "name": "ResikIn — Pelaporan Sampah",
+  "short_name": "ResikIn",
+  "description": "Sistem Pelaporan & Koordinasi Sampah Kelurahan Kota Yogyakarta",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#059669",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "government"],
+  "lang": "id"
+}
