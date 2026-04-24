@@ -313,11 +313,11 @@ function TrackingContent() {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mb-1.5">
                           <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md shrink-0">
                             {item.tracking_code}
                           </span>
-                          <span className="text-xs text-slate-400">
+                          <span className="text-[11px] text-slate-400 whitespace-nowrap">
                             {formatDateTime(item.created_at)}
                           </span>
                         </div>
