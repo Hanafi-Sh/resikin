@@ -10,6 +10,12 @@ export async function GET(request, { params }) {
   const supabase = await createClient();
   const { id } = await params;
 
+  // Check auth
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { data: report, error } = await supabase
     .from('reports')
     .select(`
