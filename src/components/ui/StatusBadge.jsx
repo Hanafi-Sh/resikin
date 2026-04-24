@@ -14,7 +14,7 @@ export default function StatusBadge({ status, size = 'md', className }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full font-semibold',
+        'inline-flex items-center justify-center gap-1.5 rounded-full font-semibold whitespace-nowrap',
         colors.bg,
         colors.text,
         sizes[size],
