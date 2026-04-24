@@ -190,14 +190,14 @@ export default function LaporanDetailPage({ params }) {
             {/* Reporter Info */}
             <Card className="p-6">
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Pelapor</h2>
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 <div className="flex items-center gap-2.5 text-sm">
-                  <User className="w-4 h-4 text-slate-400" />
-                  <span className="text-slate-700">{report.reporter_name}</span>
+                  <User className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span className="text-slate-700 leading-none pt-[2px]">{report.reporter_name}</span>
                 </div>
                 <div className="flex items-center gap-2.5 text-sm">
-                  <Phone className="w-4 h-4 text-slate-400" />
-                  <a href={`tel:${report.reporter_phone}`} className="text-emerald-600 hover:underline">{report.reporter_phone}</a>
+                  <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                  <a href={`tel:${report.reporter_phone}`} className="text-emerald-600 hover:underline leading-none pt-[2px]">{report.reporter_phone}</a>
                 </div>
               </div>
             </Card>
