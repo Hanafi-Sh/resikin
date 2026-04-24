@@ -197,7 +197,14 @@ export default function LaporanDetailPage({ params }) {
                 </div>
                 <div className="flex items-start gap-2.5 text-sm">
                   <Phone className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                  <a href={`tel:${report.reporter_phone}`} className="text-emerald-600 hover:underline">{report.reporter_phone}</a>
+                  <a 
+                    href={`https://wa.me/${report.reporter_phone.replace(/\D/g, '').replace(/^0/, '62')}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-emerald-600 hover:underline"
+                  >
+                    {report.reporter_phone}
+                  </a>
                 </div>
               </div>
             </Card>
