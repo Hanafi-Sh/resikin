@@ -25,6 +25,10 @@ export default function LaporanDetailPage({ params }) {
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [showAssignForm, setShowAssignForm] = useState(false);
 
+  // AI Recommendation State
+  const [aiRecommending, setAiRecommending] = useState(false);
+  const [aiReason, setAiReason] = useState('');
+
   useEffect(() => {
     fetchReport();
     fetchPetugas();
@@ -47,6 +51,27 @@ export default function LaporanDetailPage({ params }) {
       const data = await res.json();
       setPetugasList(data.petugas || []);
     } catch {}
+  };
+
+  const getAiRecommendation = async () => {
+    setAiRecommending(true);
+    setAiReason('');
+    try {
+      const res = await fetch('/api/ai/recommend-petugas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ report_id: id })
+      });
+      const data = await res.json();
+      if (data.success && data.recommended_petugas_id) {
+        setSelectedPetugas(data.recommended_petugas_id);
+        setAiReason(data.reason);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setAiRecommending(false);
+    }
   };
 
   const updateStatus = async (status, extra = {}) => {
@@ -255,16 +280,33 @@ export default function LaporanDetailPage({ params }) {
 
                 {showAssignForm && (
                   <div className="space-y-3 p-4 bg-slate-50 rounded-xl">
-                    <select
-                      value={selectedPetugas}
-                      onChange={(e) => setSelectedPetugas(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                    >
-                      <option value="">Pilih Petugas</option>
-                      {petugasList.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedPetugas}
+                        onChange={(e) => { setSelectedPetugas(e.target.value); setAiReason(''); }}
+                        className="flex-1 px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                      >
+                        <option value="">Pilih Petugas</option>
+                        {petugasList.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        className="shrink-0 border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
+                        onClick={getAiRecommendation}
+                        loading={aiRecommending}
+                        title="Tanya AI untuk rekomendasi petugas terbaik"
+                      >
+                        ✨ Tanya AI
+                      </Button>
+                    </div>
+                    {aiReason && (
+                      <p className="text-xs text-indigo-600 bg-indigo-50/50 p-2 rounded-lg border border-indigo-100 italic">
+                        {aiReason}
+                      </p>
+                    )}
                     <div className="flex gap-2">
                       <Button
                         size="sm"

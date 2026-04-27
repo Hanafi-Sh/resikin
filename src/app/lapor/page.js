@@ -27,6 +27,8 @@ export default function LaporPage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [trackingCode, setTrackingCode] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiWarning, setAiWarning] = useState('');
 
   const [formData, setFormData] = useState({
     category: '',
@@ -72,6 +74,30 @@ export default function LaporPage() {
       photos: [...prev.photos, ...newPhotos],
     }));
     setErrors(prev => ({ ...prev, photos: '' }));
+
+    // AI Validation (Soft Block)
+    setIsAnalyzing(true);
+    setAiWarning('');
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(files[0]); // Analisis gambar pertama saja
+      reader.onload = async () => {
+        try {
+          const aiRes = await fetch('/api/ai/validate-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: reader.result })
+          });
+          const aiData = await aiRes.json();
+          if (aiData.success && !aiData.isWaste) {
+            setAiWarning(`Peringatan AI: Gambar ini terdeteksi sebagai "${aiData.top_label}", bukan masalah sampah. Anda tetap dapat melanjutkan jika merasa AI keliru.`);
+          }
+        } catch (e) {}
+        setIsAnalyzing(false);
+      };
+    } catch (e) {
+      setIsAnalyzing(false);
+    }
   };
 
   const removePhoto = (index) => {
@@ -392,6 +418,18 @@ export default function LaporPage() {
                     </label>
                   )}
                 </div>
+                {isAnalyzing && (
+                  <div className="flex items-center gap-2 mt-3 text-sm text-emerald-600 animate-pulse">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>AI sedang menganalisis gambar...</span>
+                  </div>
+                )}
+                {aiWarning && !isAnalyzing && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl flex gap-3 text-sm text-amber-800">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                    <p>{aiWarning}</p>
+                  </div>
+                )}
                 {errors.photos && <p className="text-xs text-rose-500 mt-1">{errors.photos}</p>}
               </div>
             </div>
