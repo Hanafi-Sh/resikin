@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getClassifier } from '@/lib/local-ai';
+import { RawImage } from '@huggingface/transformers';
 
-export const maxDuration = 60; // Lebih lama untuk cold start download model
+export const maxDuration = 60;
 
 export async function POST(request) {
   try {
@@ -12,17 +13,23 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Image is required' }, { status: 400 });
     }
 
-    // Mendapatkan instance pipeline (mengunduh model pada cold-start pertama)
+    // Mendapatkan instance pipeline
     let classifier;
     try {
       classifier = await getClassifier();
     } catch (modelErr) {
       console.error('[AI] Gagal memuat model:', modelErr.message);
       return NextResponse.json({
-        error: 'Model AI gagal dimuat. Kemungkinan koneksi internet bermasalah.',
+        error: 'Model AI gagal dimuat.',
         details: modelErr.message,
       }, { status: 503 });
     }
+
+    // Konversi base64 data URI ke RawImage
+    // Format input: "data:image/jpeg;base64,/9j/4AAQ..."
+    const base64Data = image.split(',')[1];
+    const buffer = Buffer.from(base64Data, 'base64');
+    const rawImage = await RawImage.fromBlob(new Blob([buffer]));
 
     // Labels untuk zero-shot classification
     const candidate_labels = [
@@ -38,7 +45,7 @@ export async function POST(request) {
     ];
 
     // Melakukan inferensi menggunakan model lokal
-    const output = await classifier(image, candidate_labels);
+    const output = await classifier(rawImage, candidate_labels);
 
     // Cek apakah label teratas terkait sampah
     const wasteLabels = [
@@ -51,7 +58,6 @@ export async function POST(request) {
     let isWaste = false;
     let highestWasteScore = 0;
 
-    // Cek 2 label teratas untuk toleransi
     const top2 = output.slice(0, 2);
     for (const item of top2) {
       if (wasteLabels.includes(item.label)) {

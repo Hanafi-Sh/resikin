@@ -1,17 +1,17 @@
 import { pipeline, env } from '@huggingface/transformers';
+import path from 'path';
 
-// Cache model di /tmp agar Vercel bisa mengaksesnya
-env.cacheDir = '/tmp/.cache';
-// Pastikan model diunduh dari remote
-env.allowRemoteModels = true;
-env.allowLocalModels = false;
+// Konfigurasi: gunakan model lokal yang sudah diunduh, BUKAN dari internet
+env.allowLocalModels = true;
+env.allowRemoteModels = false;
+env.localModelPath = path.join(process.cwd(), 'models');
 
 let classifierInstance = null;
 let classifierLoading = null;
 
 /**
  * Mengembalikan instance pipeline zero-shot-image-classification.
- * Menggunakan Singleton pattern + loading lock agar model hanya diunduh sekali.
+ * Menggunakan model CLIP lokal yang sudah di-download ke folder /models.
  */
 export async function getClassifier() {
   if (classifierInstance) return classifierInstance;
@@ -19,21 +19,22 @@ export async function getClassifier() {
   // Cegah multiple concurrent downloads
   if (classifierLoading) return classifierLoading;
 
-  console.log('[AI] Menginisialisasi model Zero-Shot Image Classification...');
-  console.log('[AI] Model: Xenova/clip-vit-base-patch16 (lebih kecil & cepat)');
+  console.log('[AI] Memuat model Zero-Shot Image Classification dari disk lokal...');
+  console.log('[AI] Path:', path.join(process.cwd(), 'models', 'Xenova', 'clip-vit-base-patch16'));
 
   classifierLoading = pipeline(
     'zero-shot-image-classification',
     'Xenova/clip-vit-base-patch16',
-    { device: 'cpu' }
+    { device: 'cpu', dtype: 'q8' }
   );
 
   try {
     classifierInstance = await classifierLoading;
-    console.log('[AI] Model berhasil dimuat!');
+    console.log('[AI] ✅ Model berhasil dimuat dari disk lokal!');
     return classifierInstance;
   } catch (err) {
-    classifierLoading = null; // Reset agar bisa retry
+    classifierLoading = null;
+    console.error('[AI] ❌ Gagal memuat model:', err.message);
     throw err;
   }
 }
