@@ -1,26 +1,34 @@
 import { pipeline, env } from '@huggingface/transformers';
 import path from 'path';
 
-// Konfigurasi: gunakan model lokal yang sudah diunduh, BUKAN dari internet
-env.allowLocalModels = true;
-env.allowRemoteModels = false;
-env.localModelPath = path.join(process.cwd(), 'models');
+// Periksa apakah berjalan di Vercel atau environment production
+const isVercel = process.env.VERCEL === '1' || process.env.NEXT_PUBLIC_VERCEL_ENV;
+
+if (isVercel) {
+  // Di Vercel (serverless): koneksi internet sangat cepat, jadi kita download dari HuggingFace 
+  // ke folder /tmp (satu-satunya folder writable di Vercel Serverless)
+  env.cacheDir = '/tmp/.cache';
+  env.allowLocalModels = false;
+  env.allowRemoteModels = true;
+} else {
+  // Di lokal (komputer Mas Hanafi): internet lambat, jadi kita baca dari folder 'models' lokal
+  env.allowLocalModels = true;
+  env.allowRemoteModels = false;
+  env.localModelPath = path.join(process.cwd(), 'models');
+}
 
 let classifierInstance = null;
 let classifierLoading = null;
 
-/**
- * Mengembalikan instance pipeline zero-shot-image-classification.
- * Menggunakan model CLIP lokal yang sudah di-download ke folder /models.
- */
 export async function getClassifier() {
   if (classifierInstance) return classifierInstance;
-
-  // Cegah multiple concurrent downloads
   if (classifierLoading) return classifierLoading;
 
-  console.log('[AI] Memuat model Zero-Shot Image Classification dari disk lokal...');
-  console.log('[AI] Path:', path.join(process.cwd(), 'models', 'Xenova', 'clip-vit-base-patch16'));
+  if (isVercel) {
+    console.log('[AI] Memuat model di Vercel Serverless (dari HuggingFace)...');
+  } else {
+    console.log('[AI] Memuat model di Localhost (dari disk)...');
+  }
 
   classifierLoading = pipeline(
     'zero-shot-image-classification',
