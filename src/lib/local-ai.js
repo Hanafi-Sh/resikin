@@ -1,23 +1,39 @@
 import { pipeline, env } from '@huggingface/transformers';
 
-// Nonaktifkan cache model lokal Vercel (karena read-only selain /tmp)
-// Kita biarkan transformers.js menyimpan model di memory atau cache bawaannya
+// Cache model di /tmp agar Vercel bisa mengaksesnya
 env.cacheDir = '/tmp/.cache';
+// Pastikan model diunduh dari remote
+env.allowRemoteModels = true;
+env.allowLocalModels = false;
 
-class ImageClassificationPipeline {
-  static task = 'zero-shot-image-classification';
-  static model = 'Xenova/clip-vit-base-patch32';
-  static instance = null;
+let classifierInstance = null;
+let classifierLoading = null;
 
-  static async getInstance() {
-    if (this.instance === null) {
-      console.log('Menginisialisasi model AI Lokal (Zero-Shot Image Classification)...');
-      // Inisialisasi pipeline. Proses ini akan mengunduh model (~150MB) 
-      // pada pemanggilan pertama, dan menggunakan cache pada pemanggilan berikutnya.
-      this.instance = pipeline(this.task, this.model);
-    }
-    return this.instance;
+/**
+ * Mengembalikan instance pipeline zero-shot-image-classification.
+ * Menggunakan Singleton pattern + loading lock agar model hanya diunduh sekali.
+ */
+export async function getClassifier() {
+  if (classifierInstance) return classifierInstance;
+
+  // Cegah multiple concurrent downloads
+  if (classifierLoading) return classifierLoading;
+
+  console.log('[AI] Menginisialisasi model Zero-Shot Image Classification...');
+  console.log('[AI] Model: Xenova/clip-vit-base-patch16 (lebih kecil & cepat)');
+
+  classifierLoading = pipeline(
+    'zero-shot-image-classification',
+    'Xenova/clip-vit-base-patch16',
+    { device: 'cpu' }
+  );
+
+  try {
+    classifierInstance = await classifierLoading;
+    console.log('[AI] Model berhasil dimuat!');
+    return classifierInstance;
+  } catch (err) {
+    classifierLoading = null; // Reset agar bisa retry
+    throw err;
   }
 }
-
-export default ImageClassificationPipeline;
