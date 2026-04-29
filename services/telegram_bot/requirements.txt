@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+aiogram==3.27.0
+httpx
+python-dotenv
+supabase
+cachetools
+redis>=4.5.0
+pytest
+pytest-asyncio
+pydantic-settings
+
