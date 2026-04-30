@@ -251,7 +251,7 @@ export default function HomePage() {
       <section className="py-24 bg-white" id="cara-kerja">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <span className="text-sm font-semibold text-emerald-600 uppercase tracking-wider">
+            <span className="text-lg font-semibold text-emerald-600 uppercase tracking-wider">
               Cara Kerja
             </span>
             <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-slate-900">
@@ -269,8 +269,8 @@ export default function HomePage() {
                 <div key={item.step} className="relative group">
                   {/* Connector line */}
                   {i < steps.length - 1 && (
-                    <div className="hidden md:block absolute top-12 left-[60%] w-[calc(100%-20%)] h-0.5 bg-slate-200">
-                      <div className="absolute right-0 -top-1 w-2.5 h-2.5 border-r-2 border-t-2 border-slate-300 rotate-45" />
+                    <div className="md:block absolute -bottom-5 left-[40%] md:top-12 md:left-[60%] w-[20%] md:w-[80%] md:rotate-0 rotate-90 h-0.5 bg-slate-200">
+                      <div className="absolute right-0 -top-1 w-1 h-1 border-r-2 border-t-2 border-slate-300 rotate-45" />
                     </div>
                   )}
 
@@ -300,7 +300,7 @@ export default function HomePage() {
       <section className="py-24 bg-slate-50" id="fitur">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <span className="text-sm font-semibold text-emerald-600 uppercase tracking-wider">
+            <span className="text-lg font-semibold text-emerald-600 uppercase tracking-wider">
               Fitur Unggulan
             </span>
             <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-slate-900">
@@ -315,13 +315,13 @@ export default function HomePage() {
             {features.map((feature) => {
               const Icon = feature.icon;
               return (
-                <Card key={feature.title} hover className="p-6 flex gap-5">
+                <Card key={feature.title} hover className="p-6 flex gap-5 bg-gradient-emerald">
                   <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
                     <Icon className="w-6 h-6 text-emerald-600" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900 mb-2">{feature.title}</h3>
-                    <p className="text-sm text-slate-500 leading-relaxed">{feature.description}</p>
+                    <h3 className="text-lg font-bold text-white mb-2">{feature.title}</h3>
+                    <p className="text-sm text-slate-50 leading-relaxed">{feature.description}</p>
                   </div>
                 </Card>
               );
