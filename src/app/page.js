@@ -128,7 +128,7 @@ export default function HomePage() {
                   </Button>
                 </Link>
                 <Link href="/tracking">
-                  <Button variant="outline" size="xl" className="border-emerald-400/30 text-emerald-300 hover:bg-emerald-500/10">
+                  <Button variant="outline" size="xl" className="border-emerald-400/30 text-white hover:bg-emerald-500/10">
                     Lacak Laporan
                   </Button>
                 </Link>
@@ -150,7 +150,7 @@ export default function HomePage() {
             </div>
 
             {/* Right: Visual Card */}
-            <div className="hidden lg:block animate-fade-in-up delay-300">
+            <div className="lg:block animate-fade-in-up delay-300">
               <div className="relative">
                 {/* Main card */}
                 <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 space-y-6">
@@ -162,7 +162,12 @@ export default function HomePage() {
                       </div>
                       <div>
                         <p className="text-white font-semibold text-sm">Dashboard Hari Ini</p>
-                        <p className="text-slate-400 text-xs">23 April 2026</p>
+                        <p className="text-slate-400 text-xs">
+                          {(() => {
+                            const today = new Date().toLocaleDateString();
+                            return <p>{today}</p>;
+                          })()}
+                        </p>
                       </div>
                     </div>
                     <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-medium rounded-full">
@@ -188,13 +193,13 @@ export default function HomePage() {
                   <div className="space-y-3">
                     {[
                       { cat: 'Sampah Tidak Terangkut', status: 'Dalam Proses', statusColor: 'text-amber-400', area: 'RW 05' },
-                      { cat: 'TPS Penuh', status: 'Ditugaskan', statusColor: 'text-indigo-400', area: 'RW 02' },
-                      { cat: 'Sampah Liar', status: 'Diterima', statusColor: 'text-sky-400', area: 'RW 08' },
+                      { cat: 'TPS Penuh', status: 'Ditugaskan', statusColor: 'text-sky-400', area: 'RW 02' },
+                      { cat: 'Sampah Liar', status: 'Diterima', statusColor: 'text-emerald-400', area: 'RW 08' },
                     ].map((item, i) => (
                       <div key={i} className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-3">
                         <div>
                           <p className="text-white text-sm font-medium">{item.cat}</p>
-                          <p className="text-slate-500 text-xs">{item.area}</p>
+                          <p className="text-slate-400 text-xs">{item.area}</p>
                         </div>
                         <span className={`text-xs font-medium ${item.statusColor}`}>{item.status}</span>
                       </div>
@@ -203,12 +208,12 @@ export default function HomePage() {
                 </div>
 
                 {/* Floating badge */}
-                <div className="absolute -top-4 -right-4 bg-emerald-500 text-white px-4 py-2 rounded-2xl shadow-lg shadow-emerald-500/25 animate-float">
+                {/* <div className="absolute -top-4 -right-4 bg-emerald-500 text-white px-4 py-2 rounded-2xl shadow-lg shadow-emerald-500/25">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" />
                     <span className="text-sm font-semibold">Laporan Selesai!</span>
                   </div>
-                </div>
+                </div> */}
               </div>
             </div>
           </div>
