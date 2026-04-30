@@ -1,5 +1,6 @@
 from supabase import create_client
 from app.config import settings
+from typing import Optional, Dict
 
 
 class SupabaseRepo:
@@ -16,3 +17,28 @@ class SupabaseRepo:
             return res.data
         except Exception:
             return res
+
+    def find_reporter_by_telegram_id(self, telegram_id: str) -> Optional[Dict]:
+        """Find a reporter by their Telegram user ID.
+        Returns the reporter dict if found, None otherwise.
+        """
+        res = (
+            self.client.table("reporters")
+            .select("*")
+            .eq("telegram_id", telegram_id)
+            .execute()
+        )
+        data = res.data if hasattr(res, "data") else res
+        if data and isinstance(data, list) and len(data) > 0:
+            return data[0]
+        return None
+
+    def create_reporter(self, reporter: dict) -> Optional[Dict]:
+        """Insert a new reporter into the `reporters` table.
+        Returns the inserted reporter dict.
+        """
+        res = self.client.table("reporters").insert(reporter).execute()
+        data = res.data if hasattr(res, "data") else res
+        if data and isinstance(data, list) and len(data) > 0:
+            return data[0]
+        return data if isinstance(data, dict) else None

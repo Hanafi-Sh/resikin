@@ -1,13 +1,31 @@
 from pydantic import BaseModel
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from uuid import uuid4
+
+
+class Reporter(BaseModel):
+    """Warga pelapor yang menggunakan Telegram bot."""
+    id: Optional[str] = None
+    telegram_id: str
+    name: str
+    phone: Optional[str] = None
+
+    def dict_for_db(self):
+        d = self.dict()
+        if not d.get("id"):
+            d["id"] = str(uuid4())
+        return {k: v for k, v in d.items() if v is not None}
 
 
 class Report(BaseModel):
     id: Optional[str] = None
     user_id: str
+    reporter_id: Optional[str] = None
+    reporter_name: Optional[str] = None
+    reporter_phone: Optional[str] = None
     kelurahan_id: str
-    file_id: str
+    category: Optional[str] = None
+    file_ids: List[str] = []
     description: str
     latitude: float
     longitude: float

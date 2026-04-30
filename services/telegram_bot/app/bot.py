@@ -3,16 +3,19 @@ from aiogram.filters import CommandStart, StateFilter
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.config import settings
-from domain.models import Report
+from domain.models import Report, Reporter
 import asyncio
+import logging
 from app.kelurahan import KELURAHAN_OPTIONS, get_kelurahan_name
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List
 
 if TYPE_CHECKING:
     from repositories.supabase_repo import SupabaseRepo
+
+logger = logging.getLogger(__name__)
 
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
@@ -21,6 +24,35 @@ dp.include_router(router)
 
 _repo = None
 _bot = None
+
+# ── Batas maksimal foto per laporan ──
+MAX_PHOTOS = 3
+
+# ── Buffer untuk media group (album) ──
+# Ketika user mengirim beberapa foto sekaligus, Telegram mengirim
+# setiap foto sebagai Message terpisah dengan media_group_id yang sama.
+# Kita kumpulkan semua foto dalam buffer, lalu proses setelah timer selesai.
+_media_group_buffer: Dict[str, List[str]] = {}
+_media_group_tasks: Dict[str, asyncio.Task] = {}
+# Simpan referensi ke message & state agar bisa digunakan saat finalize
+_media_group_context: Dict[str, tuple] = {}
+
+# ── Kategori laporan (sesuai DB constraint di 001_initial_schema.sql) ──
+CATEGORY_OPTIONS = [
+    {"id": "tidak_terangkut", "name": "🚛 Tidak Terangkut"},
+    {"id": "tps_penuh",       "name": "🗑️ TPS Penuh"},
+    {"id": "sampah_liar",     "name": "🏚️ Sampah Liar"},
+    {"id": "bau",             "name": "😷 Bau"},
+    {"id": "lainnya",         "name": "📋 Lainnya"},
+]
+
+
+def get_category_name(category_id: str) -> str:
+    """Get display name for a category ID."""
+    return next(
+        (c["name"] for c in CATEGORY_OPTIONS if c["id"] == category_id),
+        category_id
+    )
 
 
 def get_repo() -> "SupabaseRepo":
@@ -38,22 +70,141 @@ def get_bot() -> Bot:
     return _bot
 
 
+def _get_telegram_name(user) -> str:
+    """Extract full name from Telegram user object."""
+    name = user.first_name or ""
+    if user.last_name:
+        name += f" {user.last_name}"
+    return name.strip() or "Anonim"
+
+
 class ReportStates(StatesGroup):
+    INPUT_TELEPON = State()
     PILIH_KELURAHAN = State()
+    PILIH_KATEGORI = State()
     UPLOAD_FOTO = State()
     INPUT_DESKRIPSI = State()
     SHARE_LOCATION = State()
     KONFIRMASI = State()
 
 
+# ─────────────────────────────────────────────
+# /start — Cek apakah reporter sudah terdaftar
+# ─────────────────────────────────────────────
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
+    await state.clear()
+    telegram_id = str(message.from_user.id)
+    reporter_name = _get_telegram_name(message.from_user)
+
+    # Cek apakah user sudah pernah melapor
+    try:
+        repo = get_repo()
+        existing = await asyncio.to_thread(repo.find_reporter_by_telegram_id, telegram_id)
+    except Exception:
+        logger.exception("Gagal mengecek reporter")
+        existing = None
+
+    if existing and existing.get("phone"):
+        # ── Reporter lama: langsung ke pilih kelurahan ──
+        await state.update_data(
+            reporter_id=existing["id"],
+            reporter_name=existing.get("name", reporter_name),
+            reporter_phone=existing.get("phone", ""),
+        )
+        await message.answer(
+            f"Halo kembali, {existing.get('name', reporter_name)}! 👋\n"
+            "Mari buat laporan baru."
+        )
+        await _show_kelurahan_picker(message, state)
+    else:
+        # ── Reporter baru: minta nomor telepon dulu ──
+        await state.update_data(
+            telegram_id=telegram_id,
+            reporter_name=reporter_name,
+        )
+        contact_kb = ReplyKeyboardMarkup(
+            keyboard=[[
+                KeyboardButton(
+                    text="📱 Bagikan Nomor Telepon",
+                    request_contact=True,
+                )
+            ]],
+            resize_keyboard=True,
+            one_time_keyboard=True,
+        )
+        await message.answer(
+            f"Selamat datang di ResikIn, {reporter_name}! 🙌\n\n"
+            "Untuk memulai, kami perlu nomor telepon Anda.\n"
+            "Tekan tombol di bawah untuk membagikannya secara otomatis.",
+            reply_markup=contact_kb,
+        )
+        await state.set_state(ReportStates.INPUT_TELEPON)
+
+
+# ─────────────────────────────────────────────
+# INPUT_TELEPON — Terima contact dari user baru
+# ─────────────────────────────────────────────
+@router.message(StateFilter(ReportStates.INPUT_TELEPON), F.contact)
+async def handle_contact(message: Message, state: FSMContext):
+    phone = message.contact.phone_number
+    data = await state.get_data()
+    telegram_id = data.get("telegram_id", str(message.from_user.id))
+    reporter_name = data.get("reporter_name", _get_telegram_name(message.from_user))
+
+    # Simpan reporter baru ke database
+    reporter_model = Reporter(
+        telegram_id=telegram_id,
+        name=reporter_name,
+        phone=phone,
+    )
+    try:
+        repo = get_repo()
+        # Cek dulu apakah sudah ada (mungkin pernah lapor tanpa telepon)
+        existing = await asyncio.to_thread(repo.find_reporter_by_telegram_id, telegram_id)
+        if existing:
+            reporter_id = existing["id"]
+        else:
+            created = await asyncio.to_thread(repo.create_reporter, reporter_model.dict_for_db())
+            reporter_id = created["id"] if created else None
+    except Exception:
+        logger.exception("Gagal menyimpan reporter")
+        reporter_id = None
+
+    await state.update_data(
+        reporter_id=reporter_id,
+        reporter_phone=phone,
+    )
+
+    # Hapus reply keyboard, lanjut ke pilih kelurahan
+    await message.answer(
+        f"✅ Terima kasih! Nomor {phone} tersimpan.\n"
+        "Anda tidak perlu memberikan nomor lagi di laporan berikutnya.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    await _show_kelurahan_picker(message, state)
+
+
+@router.message(StateFilter(ReportStates.INPUT_TELEPON))
+async def handle_phone_text_fallback(message: Message, state: FSMContext):
+    """Fallback jika user mengetik teks alih-alih menekan tombol contact."""
+    await message.answer(
+        "⚠️ Silakan tekan tombol \"📱 Bagikan Nomor Telepon\" di bawah, "
+        "bukan mengetik nomor secara manual."
+    )
+
+
+# ─────────────────────────────────────────────
+# PILIH_KELURAHAN — Inline keyboard kelurahan
+# ─────────────────────────────────────────────
+async def _show_kelurahan_picker(message: Message, state: FSMContext):
+    """Helper: tampilkan pilihan kelurahan."""
     builder = InlineKeyboardBuilder()
     for item in KELURAHAN_OPTIONS:
         builder.button(text=item["name"], callback_data=f"kel:{item['id']}")
     builder.adjust(2)
     kb = builder.as_markup()
-    await message.answer("Selamat datang. Silakan pilih kelurahan:", reply_markup=kb)
+    await message.answer("🏘️ Silakan pilih kelurahan:", reply_markup=kb)
     await state.set_state(ReportStates.PILIH_KELURAHAN)
 
 
@@ -62,26 +213,108 @@ async def handle_kelurahan(call: CallbackQuery, state: FSMContext):
     kelurahan_id = call.data.split(":", 1)[1] if call.data else ""
     await state.update_data(kelurahan_id=kelurahan_id)
     kel_name = get_kelurahan_name(kelurahan_id)
-    await call.message.answer(f"Kelurahan dipilih: {kel_name}. Silakan unggah foto tumpukan sampah.")
+
+    # Tampilkan pilihan kategori
+    builder = InlineKeyboardBuilder()
+    for cat in CATEGORY_OPTIONS:
+        builder.button(text=cat["name"], callback_data=f"cat:{cat['id']}")
+    builder.adjust(2)
+    kb = builder.as_markup()
+    await call.message.answer(
+        f"Kelurahan dipilih: {kel_name}.\n\n"
+        "📂 Pilih kategori laporan:",
+        reply_markup=kb,
+    )
+    await state.set_state(ReportStates.PILIH_KATEGORI)
+    await call.answer()
+
+
+# ─────────────────────────────────────────────
+# PILIH_KATEGORI — Inline keyboard kategori
+# ─────────────────────────────────────────────
+@router.callback_query(StateFilter(ReportStates.PILIH_KATEGORI), F.data.startswith("cat:"))
+async def handle_category(call: CallbackQuery, state: FSMContext):
+    category_id = call.data.split(":", 1)[1] if call.data else ""
+    await state.update_data(category=category_id)
+    cat_name = get_category_name(category_id)
+    await call.message.answer(
+        f"Kategori: {cat_name}\n\n"
+        f"📷 Silakan unggah foto tumpukan sampah (maksimal {MAX_PHOTOS} foto)."
+    )
     await state.set_state(ReportStates.UPLOAD_FOTO)
     await call.answer()
 
 
+# ─────────────────────────────────────────────
+# UPLOAD_FOTO — Terima foto tunggal atau album
+# ─────────────────────────────────────────────
 @router.message(StateFilter(ReportStates.UPLOAD_FOTO), F.photo)
 async def handle_photo(message: Message, state: FSMContext):
     file_id = message.photo[-1].file_id
-    await state.update_data(file_id=file_id)
-    await message.answer("Foto diterima. Silakan ketik deskripsi laporan.")
-    await state.set_state(ReportStates.INPUT_DESKRIPSI)
+    mg_id = message.media_group_id  # None jika foto tunggal
+
+    if mg_id is None:
+        # ── Foto tunggal: langsung proses ──
+        await state.update_data(file_ids=[file_id])
+        await message.answer("✅ 1 foto diterima. Silakan ketik deskripsi laporan.")
+        await state.set_state(ReportStates.INPUT_DESKRIPSI)
+        return
+
+    # ── Media group (album): kumpulkan foto dulu ──
+    if mg_id not in _media_group_buffer:
+        _media_group_buffer[mg_id] = []
+
+    _media_group_buffer[mg_id].append(file_id)
+
+    # Simpan referensi message & state terbaru untuk finalize
+    _media_group_context[mg_id] = (message, state)
+
+    # Batalkan timer sebelumnya (masih menunggu foto berikutnya)
+    if mg_id in _media_group_tasks:
+        _media_group_tasks[mg_id].cancel()
+
+    # Set timer: setelah 1 detik tidak ada foto baru, anggap selesai
+    async def finalize_group():
+        await asyncio.sleep(1.0)
+        collected = _media_group_buffer.pop(mg_id, [])
+        _media_group_tasks.pop(mg_id, None)
+        ctx_msg, ctx_state = _media_group_context.pop(mg_id, (message, state))
+
+        truncated = False
+        if len(collected) > MAX_PHOTOS:
+            truncated = True
+            collected = collected[:MAX_PHOTOS]
+
+        await ctx_state.update_data(file_ids=collected)
+
+        if truncated:
+            await ctx_msg.answer(
+                f"⚠️ Maksimal {MAX_PHOTOS} foto per laporan. "
+                f"Hanya {MAX_PHOTOS} foto pertama yang disimpan."
+            )
+
+        await ctx_msg.answer(
+            f"✅ {len(collected)} foto diterima. Silakan ketik deskripsi laporan."
+        )
+        await ctx_state.set_state(ReportStates.INPUT_DESKRIPSI)
+
+    task = asyncio.create_task(finalize_group())
+    _media_group_tasks[mg_id] = task
 
 
+# ─────────────────────────────────────────────
+# INPUT_DESKRIPSI — Ketik deskripsi laporan
+# ─────────────────────────────────────────────
 @router.message(StateFilter(ReportStates.INPUT_DESKRIPSI))
 async def handle_description(message: Message, state: FSMContext):
     await state.update_data(description=message.text)
-    await message.answer("Silakan bagikan lokasi (share location).")
+    await message.answer("📍 Silakan bagikan lokasi (share location).")
     await state.set_state(ReportStates.SHARE_LOCATION)
 
 
+# ─────────────────────────────────────────────
+# SHARE_LOCATION — Terima lokasi user
+# ─────────────────────────────────────────────
 @router.message(StateFilter(ReportStates.SHARE_LOCATION), F.location)
 async def handle_location(message: Message, state: FSMContext):
     data = await state.get_data()
@@ -91,20 +324,30 @@ async def handle_location(message: Message, state: FSMContext):
     )
     kelurahan_id = data.get("kelurahan_id", "-")
     kel_name = get_kelurahan_name(kelurahan_id)
+    category = data.get("category", "-")
+    cat_name = get_category_name(category)
+    file_ids = data.get("file_ids", [])
     summary = (
-        "Konfirmasi laporan:\n"
-        f"- Kelurahan: {kel_name}\n"
-        f"- Deskripsi: {data.get('description', '-') }\n"
-        f"- Lokasi: {message.location.latitude}, {message.location.longitude}"
+        "📋 Konfirmasi laporan:\n"
+        f"- 👤 Nama: {data.get('reporter_name', '-')}\n"
+        f"- 📱 Telepon: {data.get('reporter_phone', '-')}\n"
+        f"- 🏘️ Kelurahan: {kel_name}\n"
+        f"- 📂 Kategori: {cat_name}\n"
+        f"- 📷 Jumlah foto: {len(file_ids)}\n"
+        f"- 📝 Deskripsi: {data.get('description', '-')}\n"
+        f"- 📍 Lokasi: {message.location.latitude}, {message.location.longitude}"
     )
     builder = InlineKeyboardBuilder()
-    builder.button(text="Konfirmasi", callback_data="confirm:yes")
-    builder.button(text="Batal", callback_data="confirm:no")
+    builder.button(text="✅ Konfirmasi", callback_data="confirm:yes")
+    builder.button(text="❌ Batal", callback_data="confirm:no")
     kb = builder.as_markup()
     await message.answer(summary, reply_markup=kb)
     await state.set_state(ReportStates.KONFIRMASI)
 
 
+# ─────────────────────────────────────────────
+# KONFIRMASI — Simpan laporan ke database
+# ─────────────────────────────────────────────
 @router.callback_query(StateFilter(ReportStates.KONFIRMASI), F.data.startswith("confirm:"))
 async def handle_confirm(call: CallbackQuery, state: FSMContext):
     decision = call.data.split(":", 1)[1] if call.data else ""
@@ -117,8 +360,12 @@ async def handle_confirm(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     report_model = Report(
         user_id=str(call.from_user.id),
+        reporter_id=data.get("reporter_id"),
+        reporter_name=data.get("reporter_name"),
+        reporter_phone=data.get("reporter_phone"),
         kelurahan_id=data.get("kelurahan_id", "unknown"),
-        file_id=data.get("file_id"),
+        category=data.get("category"),
+        file_ids=data.get("file_ids", []),
         description=data.get("description", ""),
         latitude=data.get("latitude"),
         longitude=data.get("longitude"),
@@ -146,8 +393,8 @@ async def handle_confirm(call: CallbackQuery, state: FSMContext):
             msg += f"\n🆔 ID laporan: {inserted_id}"
         await call.message.answer(msg)
     except Exception:
+        logger.exception("Gagal menyimpan laporan")
         await call.message.answer("Terjadi kesalahan saat menyimpan laporan. Silakan coba lagi nanti.")
     finally:
         await state.clear()
         await call.answer()
-
