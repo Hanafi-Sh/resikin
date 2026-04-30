@@ -267,7 +267,7 @@ export default function HomePage() {
                 <div key={item.step} className="relative group">
                   {/* Connector line */}
                   {i < steps.length - 1 && (
-                    <div className="md:block absolute -bottom-5 left-[4 0%] md:top-12 md:left-[60%] w-[20%] md:w-[80%] md:rotate-0 rotate-90 h-0.5 bg-slate-200">
+                    <div className="md:block absolute -bottom-5 left-[40%] md:top-12 md:left-[60%] w-[20%] md:w-[80%] md:rotate-0 rotate-90 h-0.5 bg-slate-200">
                       <div className="absolute right-0 -top-1 w-1 h-1 border-r-2 border-t-2 border-slate-300 rotate-45" />
                     </div>
                   )}
