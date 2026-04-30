@@ -271,7 +271,7 @@ export default function HomePage() {
 
                   <Card hover className="text-center p-8 relative overflow-hidden group-hover:border-emerald-200 transition-colors">
                     {/* Step number watermark */}
-                    <span className="absolute top-4 right-6 text-7xl font-black text-slate-100 select-none">
+                    <span className="absolute top-4 left-6 text-3xl font-black text-black select-none">
                       {item.step}
                     </span>
 
