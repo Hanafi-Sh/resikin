@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     REDIS_URL: str = ""
     REDIS_TTL_SECONDS: int = 3600
+    NOTIFY_WEBHOOK_SECRET: str = ""
 
     model_config = ConfigDict(env_file=".env")
 

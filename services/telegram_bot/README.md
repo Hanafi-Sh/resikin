@@ -189,6 +189,7 @@ SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIs...
 HOST=0.0.0.0
 PORT=8000
+NOTIFY_WEBHOOK_SECRET=your-shared-secret
 ```
 
 > ⚠️ **Gunakan Service Role Key** (bukan Anon Key) karena bot perlu bypass RLS.
@@ -196,7 +197,7 @@ PORT=8000
 
 ### Langkah 4: Setup Database
 
-Pastikan **dua migration SQL** sudah dijalankan di Supabase SQL Editor **(secara berurutan)**:
+Pastikan **tiga migration SQL** sudah dijalankan di Supabase SQL Editor **(secara berurutan)**:
 
 1. `supabase/migrations/001_initial_schema.sql` — Skema dasar
 2. `supabase/migrations/002_telegram_bot_support.sql` — Kolom tambahan untuk bot

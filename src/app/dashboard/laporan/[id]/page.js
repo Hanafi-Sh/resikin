@@ -31,8 +31,13 @@ export default function LaporanDetailPage({ params }) {
 
   useEffect(() => {
     fetchReport();
-    fetchPetugas();
   }, [id]);
+
+  useEffect(() => {
+    if (report?.kelurahan_id) {
+      fetchPetugas(report.kelurahan_id);
+    }
+  }, [report?.kelurahan_id]);
 
   const fetchReport = async () => {
     try {
@@ -45,9 +50,9 @@ export default function LaporanDetailPage({ params }) {
     }
   };
 
-  const fetchPetugas = async () => {
+  const fetchPetugas = async (kelurahanId) => {
     try {
-      const res = await fetch('/api/users/petugas');
+      const res = await fetch(`/api/users/petugas?kelurahan_id=${kelurahanId}`);
       const data = await res.json();
       setPetugasList(data.petugas || []);
     } catch {}

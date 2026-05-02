@@ -11,6 +11,7 @@ import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { cn, formatDateTime, getRelativeTime } from '@/lib/utils';
 import { REPORT_CATEGORY_LABELS } from '@/lib/constants';
+import TelegramLinkCard from '@/components/ui/TelegramLinkCard';
 
 export default function PetugasPage() {
   const router = useRouter();
@@ -56,6 +57,11 @@ export default function PetugasPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+        {/* Telegram Integration Card */}
+        <div className="mb-8">
+          <TelegramLinkCard />
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
