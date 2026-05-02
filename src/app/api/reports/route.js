@@ -4,6 +4,23 @@ import { generateTrackingCode } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
+async function notifyBot(event, reportId) {
+  const notifyUrl = process.env.BOT_NOTIFY_URL;
+  if (!notifyUrl) return;
+  try {
+    await fetch(`${notifyUrl}/notifications/report`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-resikin-secret': process.env.BOT_NOTIFY_SECRET || '',
+      },
+      body: JSON.stringify({ event, report_id: reportId }),
+    });
+  } catch {
+    // ignore notification errors for now
+  }
+}
+
 /**
  * GET /api/reports — List semua laporan (untuk dashboard koordinator)
  */
@@ -114,6 +131,9 @@ export async function POST(request) {
       new_status: 'dikirim',
       notes: 'Laporan dibuat oleh warga',
     });
+
+    // Notify koordinator for new report
+    await notifyBot('created', report.id);
 
     return NextResponse.json({
       success: true,

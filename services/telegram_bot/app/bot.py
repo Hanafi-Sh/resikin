@@ -1,5 +1,5 @@
 from aiogram import Bot, Dispatcher, F, Router
-from aiogram.filters import CommandStart, StateFilter
+from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
@@ -9,6 +9,8 @@ from app.config import settings
 from domain.models import Report, Reporter
 import asyncio
 import logging
+import hashlib
+from datetime import datetime, timezone
 from app.kelurahan import KELURAHAN_OPTIONS, get_kelurahan_name
 from typing import TYPE_CHECKING, Dict, List
 
@@ -78,6 +80,42 @@ def _get_telegram_name(user) -> str:
     return name.strip() or "Anonim"
 
 
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def _notify_koordinator_for_report(report: dict) -> None:
+    try:
+        repo = get_repo()
+        links = repo.get_telegram_links_by_kelurahan(report.get("kelurahan_id"), "koordinator")
+        telegram_ids = [l.get("telegram_id") for l in links if l.get("telegram_id")]
+        if not telegram_ids:
+            return
+        tracking = report.get("tracking_code") or "-"
+        kel_name = get_kelurahan_name(report.get("kelurahan_id"))
+        category = report.get("category") or "-"
+        text = (
+            "📣 LAPORAN BARU MASUK!\n"
+            "Segera verifikasi laporan warga berikut di dashboard:\n\n"
+            f"- Kode: {tracking}\n"
+            f"- Kelurahan: {kel_name}\n"
+            f"- Kategori: {category}\n"
+            f"- Deskripsi: {report.get('description', '-')}"
+        )
+        bot = get_bot()
+        tasks = []
+        for tid in telegram_ids:
+            try:
+                chat_id = int(tid)
+            except Exception:
+                chat_id = tid
+            tasks.append(bot.send_message(chat_id=chat_id, text=text))
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+    except Exception:
+        logger.exception("Gagal mengirim notifikasi ke koordinator")
+
+
 class ReportStates(StatesGroup):
     INPUT_TELEPON = State()
     PILIH_KELURAHAN = State()
@@ -93,6 +131,12 @@ class ReportStates(StatesGroup):
 # ─────────────────────────────────────────────
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
+    args = message.text.split(maxsplit=1)[1] if message.text and " " in message.text else ""
+    if args.startswith("link_"):
+        token = args.replace("link_", "", 1).strip()
+        await _handle_link_token(message, token)
+        return
+
     await state.clear()
     telegram_id = str(message.from_user.id)
     reporter_name = _get_telegram_name(message.from_user)
@@ -192,6 +236,50 @@ async def handle_phone_text_fallback(message: Message, state: FSMContext):
         "⚠️ Silakan tekan tombol \"📱 Bagikan Nomor Telepon\" di bawah, "
         "bukan mengetik nomor secara manual."
     )
+
+
+@router.message(Command("link"))
+async def cmd_link(message: Message):
+    token = message.text.split(maxsplit=1)[1] if message.text and " " in message.text else ""
+    await _handle_link_token(message, token)
+
+
+async def _handle_link_token(message: Message, token: str) -> None:
+    if not token:
+        await message.answer("Gunakan format: /link <kode>\nContoh: /link A1B2C3")
+        return
+
+    try:
+        repo = get_repo()
+        token_hash = _hash_token(token)
+        link_token = await asyncio.to_thread(repo.get_link_token, token_hash)
+    except Exception:
+        logger.exception("Gagal memvalidasi token link")
+        await message.answer("Terjadi kesalahan saat memverifikasi token.")
+        return
+
+    if not link_token:
+        await message.answer("Token tidak valid atau sudah kedaluwarsa.")
+        return
+
+    link = {
+        "user_id": link_token.get("user_id"),
+        "role": link_token.get("role"),
+        "kelurahan_id": link_token.get("kelurahan_id"),
+        "sector_id": link_token.get("sector_id"),
+        "telegram_id": str(message.from_user.id),
+        "telegram_username": message.from_user.username,
+        "is_active": True,
+        "linked_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        await asyncio.to_thread(repo.upsert_telegram_link, link)
+        await asyncio.to_thread(repo.mark_link_token_used, link_token.get("id"))
+        await message.answer("✅ Akun Telegram berhasil dihubungkan.")
+    except Exception:
+        logger.exception("Gagal menyimpan telegram link")
+        await message.answer("Gagal menghubungkan akun. Silakan coba lagi.")
 
 
 # ─────────────────────────────────────────────
@@ -379,12 +467,15 @@ async def handle_confirm(call: CallbackQuery, state: FSMContext):
         inserted = await asyncio.to_thread(repo.insert_report, report_model.dict_for_db())
         inserted_id = None
         tracking_code = None
+        inserted_row = None
         if inserted and isinstance(inserted, list) and len(inserted) > 0:
             inserted_id = inserted[0].get("id")
             tracking_code = inserted[0].get("tracking_code")
+            inserted_row = inserted[0]
         elif isinstance(inserted, dict):
             inserted_id = inserted.get("id")
             tracking_code = inserted.get("tracking_code")
+            inserted_row = inserted
 
         msg = "✅ Laporan diterima, terima kasih!"
         if tracking_code:
@@ -392,6 +483,9 @@ async def handle_confirm(call: CallbackQuery, state: FSMContext):
         elif inserted_id:
             msg += f"\n🆔 ID laporan: {inserted_id}"
         await call.message.answer(msg)
+
+        if inserted_row:
+            await _notify_koordinator_for_report(inserted_row)
     except Exception:
         logger.exception("Gagal menyimpan laporan")
         await call.message.answer("Terjadi kesalahan saat menyimpan laporan. Silakan coba lagi nanti.")

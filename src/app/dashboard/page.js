@@ -12,6 +12,7 @@ import Card from '@/components/ui/Card';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { cn, formatDateTime, getRelativeTime, truncate } from '@/lib/utils';
 import { REPORT_STATUS, REPORT_CATEGORY_LABELS } from '@/lib/constants';
+import TelegramLinkCard from '@/components/ui/TelegramLinkCard';
 
 const STAT_CARDS = [
   { key: 'dikirim', label: 'Laporan Baru', icon: Inbox, color: 'text-sky-600', bg: 'bg-sky-50', ring: 'ring-sky-200' },
@@ -91,6 +92,11 @@ export default function DashboardPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Telegram Integration Card */}
+        <div className="mb-8 max-w-2xl">
+          <TelegramLinkCard />
+        </div>
+
         {/* Stat Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {STAT_CARDS.map((stat) => {

@@ -55,11 +55,11 @@ export default function LoginPage() {
 
       // Redirect based on role
       if (userProfile.role === 'koordinator') {
-        router.push('/dashboard');
+        window.location.href = '/dashboard';
       } else if (userProfile.role === 'petugas') {
-        router.push('/petugas');
+        window.location.href = '/petugas';
       } else {
-        router.push('/');
+        window.location.href = '/';
       }
     } catch (err) {
       setError('Terjadi kesalahan. Silakan coba lagi.');

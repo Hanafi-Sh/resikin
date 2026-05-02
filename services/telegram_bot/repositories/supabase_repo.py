@@ -1,6 +1,7 @@
 from supabase import create_client
 from app.config import settings
-from typing import Optional, Dict
+from typing import Optional, Dict, List
+from datetime import datetime, timezone
 
 
 class SupabaseRepo:
@@ -42,3 +43,109 @@ class SupabaseRepo:
         if data and isinstance(data, list) and len(data) > 0:
             return data[0]
         return data if isinstance(data, dict) else None
+
+    def create_link_token(self, token: dict) -> Optional[Dict]:
+        """Insert a new link token into `telegram_link_tokens`."""
+        res = self.client.table("telegram_link_tokens").insert(token).execute()
+        data = res.data if hasattr(res, "data") else res
+        if data and isinstance(data, list) and len(data) > 0:
+            return data[0]
+        return data if isinstance(data, dict) else None
+
+    def get_link_token(self, token_hash: str) -> Optional[Dict]:
+        """Fetch a valid (unused, unexpired) link token by hash."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        res = (
+            self.client.table("telegram_link_tokens")
+            .select("*")
+            .eq("token_hash", token_hash)
+            .is_("used_at", "null")
+            .gt("expires_at", now_iso)
+            .execute()
+        )
+        data = res.data if hasattr(res, "data") else res
+        if data and isinstance(data, list) and len(data) > 0:
+            return data[0]
+        return None
+
+    def mark_link_token_used(self, token_id: str) -> None:
+        """Mark a link token as used."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        self.client.table("telegram_link_tokens").update({"used_at": now_iso}).eq("id", token_id).execute()
+
+    def upsert_telegram_link(self, link: dict) -> Optional[Dict]:
+        """Upsert a telegram link by user_id and role."""
+        res = (
+            self.client.table("telegram_links")
+            .upsert(link, on_conflict="user_id,role")
+            .execute()
+        )
+        data = res.data if hasattr(res, "data") else res
+        if data and isinstance(data, list) and len(data) > 0:
+            return data[0]
+        return data if isinstance(data, dict) else None
+
+    def get_telegram_links_by_kelurahan(self, kelurahan_id: str, role: str) -> List[Dict]:
+        res = (
+            self.client.table("telegram_links")
+            .select("*")
+            .eq("role", role)
+            .eq("kelurahan_id", kelurahan_id)
+            .eq("is_active", True)
+            .execute()
+        )
+        data = res.data if hasattr(res, "data") else res
+        return data if isinstance(data, list) else []
+
+    def get_telegram_links_by_sector(self, sector_id: str, role: str) -> List[Dict]:
+        res = (
+            self.client.table("telegram_links")
+            .select("*")
+            .eq("role", role)
+            .eq("sector_id", sector_id)
+            .eq("is_active", True)
+            .execute()
+        )
+        data = res.data if hasattr(res, "data") else res
+        return data if isinstance(data, list) else []
+
+    def get_sector_for_kelurahan(self, kelurahan_id: str) -> Optional[str]:
+        res = (
+            self.client.table("sector_kelurahan")
+            .select("sector_id")
+            .eq("kelurahan_id", kelurahan_id)
+            .execute()
+        )
+        data = res.data if hasattr(res, "data") else res
+        if data and isinstance(data, list) and len(data) > 0:
+            return data[0].get("sector_id")
+        return None
+
+    def get_report_by_id(self, report_id: str) -> Optional[Dict]:
+        try:
+            res = (
+                self.client.table("reports")
+                .select("*")
+                .eq("id", report_id)
+                .single()
+                .execute()
+            )
+            data = res.data if hasattr(res, "data") else res
+            return data if isinstance(data, dict) else None
+        except Exception:
+            return None
+
+    def get_telegram_link_by_user_id(self, user_id: str, role: str) -> Optional[Dict]:
+        """Find a telegram link by user_id and role."""
+        res = (
+            self.client.table("telegram_links")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("role", role)
+            .eq("is_active", True)
+            .execute()
+        )
+        data = res.data if hasattr(res, "data") else res
+        if data and isinstance(data, list) and len(data) > 0:
+            return data[0]
+        return None

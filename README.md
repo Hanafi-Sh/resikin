@@ -75,12 +75,17 @@ npm install
 # 3. Setup environment variables
 cp .env.local.example .env.local
 # Edit .env.local dan isi SUPABASE_URL + SUPABASE_ANON_KEY
+# Optional (notifikasi bot):
+#   - BOT_NOTIFY_URL (contoh: https://bot.example.com)
+#   - BOT_NOTIFY_SECRET (shared secret)
+#   - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME (untuk deep link /start)
 
 # 4. Setup database
 # Buka Supabase Dashboard → SQL Editor
 # Jalankan file secara berurutan:
 #   - supabase/migrations/001_initial_schema.sql
 #   - supabase/migrations/002_telegram_bot_support.sql
+#   - supabase/migrations/003_telegram_linking_and_sectors.sql
 
 # 5. Run development server
 npm run dev
@@ -105,6 +110,7 @@ cp .env.example .env
 #   - TELEGRAM_BOT_TOKEN (dari BotFather)
 #   - SUPABASE_URL
 #   - SUPABASE_SERVICE_ROLE_KEY
+#   - NOTIFY_WEBHOOK_SECRET (harus sama dengan BOT_NOTIFY_SECRET)
 
 # 4. Jalankan bot
 python run_bot.py
@@ -164,6 +170,7 @@ Menggunakan **Supabase** (PostgreSQL). Dua file migration yang harus dijalankan 
 |------|-----------|
 | `001_initial_schema.sql` | Skema awal: tabel `reports`, `users`, `report_photos`, `assignments`, `status_history`, `schedules` + RLS policies |
 | `002_telegram_bot_support.sql` | Menambahkan kolom `user_id`, `file_id`, `metadata`, `source` ke tabel `reports` untuk mendukung pelaporan dari Telegram bot |
+| `003_telegram_linking_and_sectors.sql` | Menambahkan tabel `sectors`, `sector_kelurahan`, dan tabel linking Telegram untuk koordinator/petugas |
 
 > Jalankan di Supabase Dashboard → SQL Editor secara berurutan.
 

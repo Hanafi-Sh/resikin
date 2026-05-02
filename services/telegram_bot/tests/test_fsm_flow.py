@@ -11,6 +11,16 @@ class DummyBot(Bot):
     async def __call__(self, *args, **kwargs):
         return True
 
+class DummyRepo:
+    def find_reporter_by_telegram_id(self, tid):
+        return {"id": "123", "phone": "08123456789"}
+    def insert_report(self, data):
+        data["id"] = "test-id"
+        data["tracking_code"] = "TEST-123"
+        return [data]
+    def get_telegram_links_by_kelurahan(self, kel_id, role):
+        return []
+
 
 def _base_user():
     return {"id": 1, "is_bot": False, "first_name": "Test"}
@@ -63,9 +73,11 @@ async def _feed_callback(dp: Dispatcher, bot: Bot, data: str):
 
 
 @pytest.mark.asyncio
-async def test_fsm_flow_happy_path_cancel():
+async def test_fsm_flow_happy_path_cancel(monkeypatch):
     os.environ["TELEGRAM_BOT_TOKEN"] = "123:TEST"
     bot_module = importlib.import_module("app.bot")
+    monkeypatch.setattr(bot_module, "get_repo", lambda: DummyRepo())
+    
     ReportStates = bot_module.ReportStates
     dp = bot_module.dp
     storage = bot_module.storage
@@ -77,6 +89,9 @@ async def test_fsm_flow_happy_path_cancel():
     assert await storage.get_state(key) == ReportStates.PILIH_KELURAHAN.state
 
     await _feed_callback(dp, bot, data="kel:kotabaru")
+    assert await storage.get_state(key) == ReportStates.PILIH_KATEGORI.state
+
+    await _feed_callback(dp, bot, data="cat:tps_penuh")
     assert await storage.get_state(key) == ReportStates.UPLOAD_FOTO.state
 
     photo = [{"file_id": "file-1", "file_unique_id": "fu-1", "width": 1, "height": 1, "file_size": 1}]

@@ -3,6 +3,23 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+async function notifyBot(event, reportId, extra = {}) {
+  const notifyUrl = process.env.BOT_NOTIFY_URL;
+  if (!notifyUrl) return;
+  try {
+    await fetch(`${notifyUrl}/notifications/report`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-resikin-secret': process.env.BOT_NOTIFY_SECRET || '',
+      },
+      body: JSON.stringify({ event, report_id: reportId, ...extra }),
+    });
+  } catch {
+    // ignore notification errors for now
+  }
+}
+
 /**
  * GET /api/reports/[id] — Detail laporan
  */
@@ -107,6 +124,11 @@ export async function PATCH(request, { params }) {
         petugas_id,
         assigned_by: userProfile?.id,
       });
+    }
+
+    // Notify petugas when report is assigned to them
+    if (status === 'ditugaskan' && petugas_id && status !== currentReport.status) {
+      await notifyBot('assigned', id, { petugas_id });
     }
 
     return NextResponse.json({ success: true, status });
