@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = ""
     REDIS_TTL_SECONDS: int = 3600
     NOTIFY_WEBHOOK_SECRET: str = ""
+    APP_BASE_URL: str = "http://127.0.0.1:3000"
 
     model_config = ConfigDict(env_file=".env")
 

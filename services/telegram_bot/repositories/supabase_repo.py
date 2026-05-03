@@ -135,6 +135,21 @@ class SupabaseRepo:
         except Exception:
             return None
 
+    def get_reporter_by_id(self, reporter_id: str) -> Optional[Dict]:
+        """Find a reporter by their internal reporter UUID."""
+        if not reporter_id:
+            return None
+        res = (
+            self.client.table("reporters")
+            .select("*")
+            .eq("id", reporter_id)
+            .execute()
+        )
+        data = res.data if hasattr(res, "data") else res
+        if data and isinstance(data, list) and len(data) > 0:
+            return data[0]
+        return None
+
     def get_telegram_link_by_user_id(self, user_id: str, role: str) -> Optional[Dict]:
         """Find a telegram link by user_id and role."""
         res = (

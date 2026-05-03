@@ -27,7 +27,7 @@ Service ini adalah **service Python terpisah** dari web app Next.js. Bot ini men
 | Komponen | Teknologi | Keterangan |
 |----------|-----------|------------|
 | Bot Framework | [aiogram 3.27](https://docs.aiogram.dev/) | Async Telegram bot framework dengan FSM |
-| API Server | [FastAPI](https://fastapi.tiangolo.com/) | Untuk image proxy & health check |
+| API Server | [FastAPI](https://fastapi.tiangolo.com/) | Untuk notifikasi status, image proxy, dan health check |
 | Database | [Supabase](https://supabase.com/) (PostgreSQL) | Shared dengan web app Next.js |
 | HTTP Client | httpx | Untuk komunikasi ke Telegram API |
 | Config | pydantic-settings | Type-safe configuration dari `.env` |
@@ -45,16 +45,17 @@ Service ini adalah **service Python terpisah** dari web app Next.js. Bot ini men
 │              │     │  ┌──────────┐  ┌────────────────────┐   │     │  SQL)    │
 │  /start      │     │  │ aiogram  │  │  FastAPI            │   │     │          │
 │  foto        │     │  │ Bot      │  │  - /health          │   │     │ reports  │
-│  deskripsi   │     │  │ (polling)│  │  - /telegram/file/  │   │     │ table    │
-│  lokasi      │     │  └──────────┘  └────────────────────┘   │     │          │
+│  deskripsi   │     │  │ (polling)│  │  - /notifications/  │   │     │ table    │
+│  lokasi      │     │  │          │  │  - /telegram/file/  │   │     │          │
+│              │     │  └──────────┘  └────────────────────┘   │     │          │
 └─────────────┘     └──────────────────────────────────────────┘     └──────────┘
                          run_bot.py       uvicorn app.main
-                         (Terminal 1)     (Terminal 2, opsional)
+                         (Terminal 1)     (Terminal 2, wajib untuk notifikasi)
 ```
 
 **Dua proses terpisah:**
 - **`run_bot.py`** — Bot Telegram (long polling), **wajib** dijalankan.
-- **`uvicorn app.main`** — FastAPI server untuk image proxy, **opsional** untuk development (hanya diperlukan jika web dashboard perlu menampilkan foto laporan).
+- **`uvicorn app.main`** — FastAPI server, **wajib** untuk notifikasi status dari web dan proxy foto Telegram.
 
 ---
 
@@ -77,6 +78,7 @@ services/telegram_bot/
 │   ├── main.py                 # FastAPI app instance
 │   └── api/                    # FastAPI endpoints
 │       ├── health.py           # GET /health
+│       ├── notifications.py    # POST /notifications/report
 │       └── image_proxy.py      # GET /telegram/file/{file_id}
 │
 ├── domain/                     # Domain models
@@ -193,6 +195,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIs...
 HOST=0.0.0.0
 PORT=8000
 NOTIFY_WEBHOOK_SECRET=your-shared-secret
+APP_BASE_URL=http://127.0.0.1:3000
 ```
 
 > ⚠️ **Gunakan Service Role Key** (bukan Anon Key) karena bot perlu bypass RLS.
@@ -225,22 +228,46 @@ Output yang diharapkan:
 2026-04-29 16:56:34 [INFO] aiogram.dispatcher: Run polling for bot @NamaBotKamu id=1234567890 - 'NamaBot'
 ```
 
-### Langkah 6: Tes di Telegram
+### Langkah 6: Jalankan FastAPI Server
 
-1. Buka Telegram di HP/desktop
-2. Cari username bot kamu (yang didaftarkan di BotFather)
-3. Klik **Start** atau ketik `/start`
-4. Ikuti alur: pilih kelurahan → kirim foto → ketik deskripsi → share lokasi → konfirmasi
-
-### (Opsional) Jalankan FastAPI Server
-
-Hanya perlu jika web dashboard butuh menampilkan foto dari laporan bot:
+FastAPI server wajib untuk menerima webhook internal dari web app:
 
 ```bash
 # Di terminal terpisah
 source .venv/bin/activate
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+Tes health check:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Output yang diharapkan:
+
+```json
+{"status":"ok"}
+```
+
+### Langkah 7: Tes di Telegram
+
+1. Buka Telegram di HP/desktop
+2. Cari username bot kamu (yang didaftarkan di BotFather)
+3. Klik **Start** atau ketik `/start`
+4. Ikuti alur: pilih kelurahan → kirim foto → ketik deskripsi → share lokasi → konfirmasi
+
+### Testing Notifikasi Status dari Web
+
+Untuk notifikasi perubahan status ke warga:
+
+1. Pastikan `run_bot.py` aktif.
+2. Pastikan `uvicorn app.main:app ...` aktif di port yang sama dengan `BOT_NOTIFY_URL`.
+3. Pastikan `NOTIFY_WEBHOOK_SECRET` sama dengan `BOT_NOTIFY_SECRET` di web.
+4. Pastikan `APP_BASE_URL` mengarah ke web app yang bisa dibuka publik jika tombol dibuka dari HP.
+5. Buat laporan lewat bot, lalu ubah status dari dashboard web.
+
+Pesan status dikirim untuk perubahan status yang benar-benar berubah. PATCH ke status yang sama tidak mengirim pesan ulang.
 
 ---
 
@@ -255,6 +282,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 | `PORT` | ❌ | Port server FastAPI (default: `8000`) |
 | `REDIS_URL` | ❌ | URL Redis untuk cache image proxy |
 | `REDIS_TTL_SECONDS` | ❌ | TTL cache Redis dalam detik (default: `3600`) |
+| `NOTIFY_WEBHOOK_SECRET` | ✅ untuk notifikasi | Shared secret. Harus sama dengan `BOT_NOTIFY_SECRET` di web app |
+| `APP_BASE_URL` | ✅ untuk tombol Telegram | URL web app publik untuk tombol tracking, misalnya domain production atau URL ngrok |
 
 > **File `.env` tidak boleh di-commit ke Git!** File sudah dimasukkan di `.gitignore`.
 
@@ -284,7 +313,26 @@ Migration juga:
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
 | `GET` | `/health` | Health check, return `{"status": "ok"}` |
+| `POST` | `/notifications/report` | Webhook internal dari web app untuk notifikasi laporan baru, tugas petugas, dan status warga |
 | `GET` | `/telegram/file/{file_id}` | Proxy foto dari Telegram API. Digunakan oleh web dashboard untuk menampilkan foto laporan tanpa mengekspos bot token. |
+
+### Event `/notifications/report`
+
+Endpoint ini dipanggil oleh web app lewat `BOT_NOTIFY_URL`.
+
+| Event | Penerima | Keterangan |
+|-------|----------|------------|
+| `created` | Koordinator yang punya link Telegram sesuai kelurahan laporan | Laporan baru masuk |
+| `assigned` | Petugas yang ditugaskan dan sudah link Telegram | Tugas baru untuk petugas |
+| `status_changed` | Warga pelapor dari `reports.reporter_id -> reporters.telegram_id`, fallback ke `reports.user_id` | Update status laporan warga |
+
+Untuk event `status_changed`, tombol **Lacak Laporan** dibuat dari:
+
+```txt
+APP_BASE_URL/tracking?code=<tracking_code>
+```
+
+Jika `APP_BASE_URL` masih `localhost`, Telegram bisa menolak tombol atau HP tidak bisa membuka link. Gunakan URL publik saat testing dari Telegram mobile.
 
 ### Contoh penggunaan image proxy:
 ```
@@ -336,8 +384,51 @@ Data yang dikirim bot ke Supabase:
 | **Koordinat `float`**, bukan PostGIS | Cukup untuk MVP, menghindari kompleksitas ekstensi PostGIS |
 | **`source` column** di tabel reports | Membedakan laporan dari web (`'web'`) dan Telegram (`'telegram'`) |
 | **`tracking_code` auto-generated** | Trigger DB generate format `RSK-YYYYMMDD-XXXXX`, user-friendly |
+| **Identitas warga memakai tabel `reporters`** | Warga Telegram disimpan sebagai reporter, bukan `telegram_links`; `telegram_links` dipakai untuk koordinator/petugas |
+| **FastAPI wajib untuk notifikasi** | Web app mengirim event ke `/notifications/report`; `run_bot.py` saja tidak cukup |
+| **Tracking link dirender server-side** | Halaman `/tracking?code=...` mengambil report awal dari server agar stabil saat dibuka dari Telegram/ngrok |
 
 ---
+
+## 🌍 Testing Lokal dengan Tunnel
+
+Telegram membutuhkan URL publik untuk tombol inline keyboard. Untuk development lokal, gunakan ngrok atau tunnel sejenis ke port web app:
+
+```bash
+# Terminal web
+npm run dev
+
+# Terminal tunnel
+ngrok http 3000
+```
+
+Setelah mendapatkan URL seperti:
+
+```txt
+https://contoh.ngrok-free.dev
+```
+
+set di `.env` bot:
+
+```env
+APP_BASE_URL=https://contoh.ngrok-free.dev
+```
+
+Jika memakai Next dev server (`npm run dev`) lewat ngrok, tambahkan domain tunnel ke `allowedDevOrigins` di `next.config.mjs`:
+
+```js
+allowedDevOrigins: ['*.ngrok-free.dev']
+```
+
+Untuk flow end-to-end yang lebih stabil, terutama login dan redirect, gunakan mode production lokal:
+
+```bash
+npm run build
+npm run start
+ngrok http 3000
+```
+
+Mode production tidak memakai HMR/WebSocket Next dev server, sehingga lebih cocok diuji lewat tunnel.
 
 ## 🔧 Troubleshooting
 
@@ -351,6 +442,10 @@ Data yang dikirim bot ke Supabase:
 | Error saat simpan laporan | Migration `002` belum dijalankan | Jalankan `002_telegram_bot_support.sql` di Supabase SQL Editor |
 | `tracking_code` duplicate | Collision di random 5-digit | Sangat jarang terjadi; re-run bot untuk retry |
 | Redis connection error | Redis tidak terinstall/berjalan | Aman diabaikan — Redis opsional, hanya untuk cache image proxy |
+| Warga tidak menerima notifikasi status | FastAPI tidak jalan, secret mismatch, atau Telegram menolak URL tombol | Jalankan `uvicorn`, cek `NOTIFY_WEBHOOK_SECRET`, dan pastikan `APP_BASE_URL` URL publik |
+| Endpoint notifikasi merespons `{"sent":0,"recipients":1}` | Penerima ditemukan, tetapi `bot.send_message` gagal | Biasanya URL tombol invalid/localhost; gunakan tunnel/domain publik |
+| Link tracking dari Telegram loading terus | Halaman client belum hydrate atau tunnel/dev server bermasalah | Pastikan versi terbaru memakai server-side initial report di `/tracking?code=...`; coba production mode lokal |
+| Login reload sendiri lewat ngrok | Next dev HMR/WebSocket atau origin dev lewat tunnel tidak stabil | Tambahkan `allowedDevOrigins` untuk domain ngrok atau pakai `npm run build && npm run start` |
 
 ---
 
