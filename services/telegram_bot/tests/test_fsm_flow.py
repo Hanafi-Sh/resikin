@@ -77,6 +77,11 @@ async def test_fsm_flow_happy_path_cancel(monkeypatch):
     os.environ["TELEGRAM_BOT_TOKEN"] = "123:TEST"
     bot_module = importlib.import_module("app.bot")
     monkeypatch.setattr(bot_module, "get_repo", lambda: DummyRepo())
+
+    async def immediate_to_thread(func, /, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(bot_module.asyncio, "to_thread", immediate_to_thread)
     
     ReportStates = bot_module.ReportStates
     dp = bot_module.dp

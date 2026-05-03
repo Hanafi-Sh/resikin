@@ -91,6 +91,9 @@ services/telegram_bot/
 │   ├── __init__.py
 │   └── supabase_repo.py        # Supabase CRUD operations
 │
+├── scripts/                    # Script manual untuk cek data operasional
+│   └── check_notification_data.py
+│
 └── tests/                      # Unit & integration tests
 ```
 
@@ -360,6 +363,20 @@ source .venv/bin/activate
 # Jalankan tests
 pytest tests/ -v
 ```
+
+### Cek Data Notifikasi Manual
+
+Script ini dipakai untuk debugging data Supabase yang menentukan routing notifikasi Telegram. Ini bukan unit test dan tidak dijalankan oleh `pytest`.
+
+```bash
+# Dari folder services/telegram_bot
+python scripts/check_notification_data.py
+
+# Filter user tertentu
+python scripts/check_notification_data.py --user-name "petugas krasak"
+```
+
+Secara default Telegram ID dimasking di output. Gunakan `--show-telegram-ids` hanya saat benar-benar perlu cek nilai lengkap.
 
 ---
 
