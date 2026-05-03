@@ -17,7 +17,7 @@ Sistem ini terdiri dari **dua komponen utama**:
 - **🔍 Tracking Realtime** — Pantau status laporan dengan nomor tracking unik
 - **📊 Dashboard Koordinator** — Kelola semua laporan dari satu tempat
 - **👷 Panel Petugas** — Daftar tugas harian dengan navigasi lokasi
-- **🔔 Notifikasi Status** — Perubahan status tercatat dan dapat dilacak
+- **🔔 Notifikasi Status Telegram** — Warga pelapor dari bot menerima update saat status laporan berubah
 - **📋 Info Publik** — Pengumuman dan tips kebersihan
 
 ### 🤖 Telegram Bot
@@ -26,6 +26,7 @@ Sistem ini terdiri dari **dua komponen utama**:
 - **📍 Share Lokasi** — Gunakan fitur location Telegram untuk titik koordinat yang akurat
 - **🏘️ Pilih Kelurahan** — 45 kelurahan di Kota Yogyakarta tersedia sebagai pilihan
 - **📋 Kode Tracking** — Setiap laporan mendapat kode tracking otomatis (format: `RSK-YYYYMMDD-XXXXX`)
+- **🔔 Update Status** — Mengirim pesan ke warga saat laporan diterima, ditugaskan, diproses, selesai, atau ditolak
 
 ---
 
@@ -47,7 +48,7 @@ Sistem ini terdiri dari **dua komponen utama**:
 | Layer | Teknologi |
 |-------|-----------|
 | Bot Framework | aiogram 3.27 (Python, async) |
-| API Server | FastAPI (image proxy & health check) |
+| API Server | FastAPI (notifikasi status, image proxy & health check) |
 | Database | Supabase (shared dengan web app) |
 | Runtime | Python 3.12+ |
 
@@ -85,6 +86,8 @@ cp .env.local.example .env.local
 # Jalankan file secara berurutan:
 #   - supabase/migrations/001_initial_schema.sql
 #   - supabase/migrations/002_telegram_bot_support.sql
+#   - supabase/migrations/003_multi_photo_support.sql
+#   - supabase/migrations/004_reporters_and_categories.sql
 #   - supabase/migrations/003_telegram_linking_and_sectors.sql
 
 # 5. Run development server
@@ -111,9 +114,14 @@ cp .env.example .env
 #   - SUPABASE_URL
 #   - SUPABASE_SERVICE_ROLE_KEY
 #   - NOTIFY_WEBHOOK_SECRET (harus sama dengan BOT_NOTIFY_SECRET)
+#   - APP_BASE_URL (URL web publik untuk tombol notifikasi Telegram)
 
-# 4. Jalankan bot
+# 4. Jalankan bot polling
 python run_bot.py
+
+# 5. Di terminal lain, jalankan FastAPI bot service
+# Wajib untuk notifikasi status dan proxy foto Telegram.
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 > 📖 Dokumentasi lengkap Telegram bot tersedia di [`services/telegram_bot/README.md`](services/telegram_bot/README.md)
@@ -162,17 +170,54 @@ resikin/
 
 ---
 
+## 🔔 Notifikasi Status Telegram
+
+Alur notifikasi status berjalan lintas dua service:
+
+1. Warga membuat laporan dari Telegram bot. Bot menyimpan `reports.user_id` dan `reports.reporter_id`.
+2. Koordinator/petugas mengubah status laporan dari web.
+3. Route web `PATCH /api/reports/[id]` memanggil `BOT_NOTIFY_URL/notifications/report`.
+4. FastAPI bot service mencari Telegram ID warga dari tabel `reporters`, lalu mengirim pesan Telegram.
+5. Pesan berisi tombol **Lacak Laporan** ke `APP_BASE_URL/tracking?code=<tracking_code>`.
+
+Karena tombol Telegram harus memakai URL publik, `APP_BASE_URL` tidak boleh `localhost` jika dibuka dari HP. Untuk testing lokal, gunakan tunnel seperti ngrok atau Cloudflare Tunnel.
+
+Untuk testing paling stabil lewat tunnel:
+
+```bash
+# Terminal 1: web production lokal
+npm run build
+npm run start
+
+# Terminal 2: tunnel ke web
+ngrok http 3000
+
+# Terminal 3: bot polling
+cd services/telegram_bot
+source .venv/bin/activate
+python run_bot.py
+
+# Terminal 4: FastAPI bot service
+cd services/telegram_bot
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Jika memakai `npm run dev` lewat ngrok, tambahkan domain ngrok ke `allowedDevOrigins` di `next.config.mjs`, atau gunakan wildcard seperti `*.ngrok-free.dev`. Dev mode memakai HMR/WebSocket dan bisa kurang stabil lewat tunnel.
+
 ## 🗄️ Database
 
-Menggunakan **Supabase** (PostgreSQL). Dua file migration yang harus dijalankan berurutan:
+Menggunakan **Supabase** (PostgreSQL). File migration yang harus dijalankan:
 
 | File | Deskripsi |
 |------|-----------|
 | `001_initial_schema.sql` | Skema awal: tabel `reports`, `users`, `report_photos`, `assignments`, `status_history`, `schedules` + RLS policies |
 | `002_telegram_bot_support.sql` | Menambahkan kolom `user_id`, `file_id`, `metadata`, `source` ke tabel `reports` untuk mendukung pelaporan dari Telegram bot |
+| `003_multi_photo_support.sql` | Dukungan multi foto laporan |
+| `004_reporters_and_categories.sql` | Tabel `reporters` untuk identitas warga Telegram dan relasi `reports.reporter_id` |
 | `003_telegram_linking_and_sectors.sql` | Menambahkan tabel `sectors`, `sector_kelurahan`, dan tabel linking Telegram untuk koordinator/petugas |
 
-> Jalankan di Supabase Dashboard → SQL Editor secara berurutan.
+> Jalankan di Supabase Dashboard → SQL Editor. Perhatikan dependensi: `004_reporters_and_categories.sql` membutuhkan fungsi `update_updated_at_column()` dari migration awal.
 
 ---
 

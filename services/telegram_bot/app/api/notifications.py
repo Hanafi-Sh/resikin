@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional, List
 import asyncio
+from urllib.parse import quote
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from app.config import settings
@@ -23,6 +24,47 @@ def _format_report_message(report: dict, title: str) -> str:
         f"- Kategori: {category}\n"
         f"- Deskripsi: {description}"
     )
+
+
+STATUS_LABELS = {
+    "dikirim": "Dikirim",
+    "diterima": "Diterima",
+    "ditugaskan": "Ditugaskan",
+    "dalam_proses": "Dalam Proses",
+    "selesai": "Selesai",
+    "ditolak": "Ditolak",
+}
+
+
+def _app_url(path: str) -> str:
+    base_url = (settings.APP_BASE_URL or "http://127.0.0.1:3000").rstrip("/")
+    return f"{base_url}{path}"
+
+
+def _format_status_message(report: dict, new_status: str) -> str:
+    tracking = report.get("tracking_code") or "-"
+    status_label = STATUS_LABELS.get(new_status, new_status or "-")
+    category = report.get("category") or "-"
+    address = report.get("address") or "-"
+    lines = [
+        "Status laporan Anda diperbarui.",
+        f"- Status: {status_label}",
+        f"- Kode: {tracking}",
+        f"- Kategori: {category}",
+        f"- Alamat: {address}",
+    ]
+    if new_status == "ditolak" and report.get("reject_reason"):
+        lines.append(f"- Alasan: {report.get('reject_reason')}")
+    return "\n".join(lines)
+
+
+def _get_reporter_telegram_id(repo, report: dict) -> Optional[str]:
+    reporter_id = report.get("reporter_id")
+    if reporter_id:
+        reporter = repo.get_reporter_by_id(reporter_id)
+        if reporter and reporter.get("telegram_id"):
+            return reporter.get("telegram_id")
+    return report.get("user_id")
 
 
 async def _send_messages(telegram_ids: List[str], text: str, reply_markup: Optional[InlineKeyboardMarkup] = None) -> int:
@@ -65,7 +107,7 @@ async def notify_report(payload: dict, x_resikin_secret: Optional[str] = Header(
         # Tambahkan tombol link ke dashboard koordinator
         btn = InlineKeyboardButton(
             text="Lihat & Verifikasi Laporan", 
-            url=f"http://127.0.0.1:3000/dashboard/laporan/{report_id}"
+            url=_app_url(f"/dashboard/laporan/{report_id}")
         )
         markup = InlineKeyboardMarkup(inline_keyboard=[[btn]])
         
@@ -83,9 +125,25 @@ async def notify_report(payload: dict, x_resikin_secret: Optional[str] = Header(
         # Tambahkan tombol link ke dashboard petugas
         btn = InlineKeyboardButton(
             text="Buka Daftar Tugas", 
-            url="http://127.0.0.1:3000/petugas"
+            url=_app_url("/petugas")
         )
         markup = InlineKeyboardMarkup(inline_keyboard=[[btn]])
+
+    elif event == "status_changed":
+        new_status = payload.get("new_status") or report.get("status")
+        telegram_id = _get_reporter_telegram_id(repo, report)
+        if not telegram_id:
+            return {"sent": 0, "reason": "reporter_telegram_not_found"}
+        telegram_ids = [telegram_id]
+        text = _format_status_message(report, new_status)
+
+        tracking_code = report.get("tracking_code")
+        if tracking_code:
+            btn = InlineKeyboardButton(
+                text="Lacak Laporan",
+                url=_app_url(f"/tracking?code={quote(tracking_code)}")
+            )
+            markup = InlineKeyboardMarkup(inline_keyboard=[[btn]])
         
     else:
         raise HTTPException(status_code=400, detail="Unsupported event")

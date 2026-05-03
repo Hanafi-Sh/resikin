@@ -131,6 +131,14 @@ export async function PATCH(request, { params }) {
       await notifyBot('assigned', id, { petugas_id });
     }
 
+    // Notify the reporter when the public-facing report status changes.
+    if (status && status !== currentReport.status) {
+      await notifyBot('status_changed', id, {
+        old_status: currentReport.status,
+        new_status: status,
+      });
+    }
+
     return NextResponse.json({ success: true, status });
 
   } catch (err) {

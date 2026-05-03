@@ -12,6 +12,10 @@ REPORT = {
     "kelurahan_id": "kotabaru",
     "category": "tps_penuh",
     "description": "TPS di dekat pasar sudah penuh",
+    "address": "Pasar Kotabaru",
+    "reporter_id": "reporter-1",
+    "user_id": "3001",
+    "reject_reason": "Foto tidak jelas",
 }
 
 
@@ -38,6 +42,12 @@ class DummyRepo:
             return {"telegram_id": "2001"}
         return None
 
+    def get_reporter_by_id(self, reporter_id):
+        self.link_queries.append(("reporter", reporter_id))
+        if reporter_id == "reporter-1":
+            return {"telegram_id": "3001"}
+        return None
+
 
 class DummyBot:
     def __init__(self):
@@ -56,6 +66,7 @@ def notification_fakes(monkeypatch):
     monkeypatch.setattr(supabase_repo, "SupabaseRepo", lambda: repo)
     monkeypatch.setattr(notifications, "get_bot", lambda: bot)
     monkeypatch.setattr(notifications.settings, "NOTIFY_WEBHOOK_SECRET", "")
+    monkeypatch.setattr(notifications.settings, "APP_BASE_URL", "http://127.0.0.1:3000")
 
     return repo, bot
 
@@ -137,4 +148,105 @@ async def test_notify_report_assigned_without_link_returns_reason(notification_f
     assert response.status_code == 200
     assert response.json() == {"sent": 0, "reason": "petugas_telegram_not_linked"}
     assert repo.link_queries == [("user", "petugas-missing-link", "petugas")]
+    assert bot.messages == []
+
+
+@pytest.mark.asyncio
+async def test_notify_report_status_changed_sends_to_reporter(notification_fakes):
+    repo, bot = notification_fakes
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.post(
+            "/notifications/report",
+            json={
+                "event": "status_changed",
+                "report_id": REPORT["id"],
+                "old_status": "dikirim",
+                "new_status": "dalam_proses",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"sent": 1, "recipients": 1}
+    assert repo.link_queries == [("reporter", "reporter-1")]
+    assert len(bot.messages) == 1
+
+    message = bot.messages[0]
+    assert message["chat_id"] == 3001
+    assert "Status laporan Anda diperbarui." in message["text"]
+    assert "- Status: Dalam Proses" in message["text"]
+    assert "- Kode: RSK-001" in message["text"]
+    assert "- Kategori: tps_penuh" in message["text"]
+    assert "- Alamat: Pasar Kotabaru" in message["text"]
+
+    button = message["reply_markup"].inline_keyboard[0][0]
+    assert button.text == "Lacak Laporan"
+    assert button.url == "http://127.0.0.1:3000/tracking?code=RSK-001"
+
+
+@pytest.mark.asyncio
+async def test_notify_report_status_changed_falls_back_to_report_user_id(notification_fakes, monkeypatch):
+    repo, bot = notification_fakes
+    fallback_report = {**REPORT, "reporter_id": "missing-reporter", "user_id": "3002"}
+    monkeypatch.setattr(repo, "get_report_by_id", lambda report_id: fallback_report)
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.post(
+            "/notifications/report",
+            json={
+                "event": "status_changed",
+                "report_id": REPORT["id"],
+                "new_status": "selesai",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"sent": 1, "recipients": 1}
+    assert repo.link_queries == [("reporter", "missing-reporter")]
+    assert bot.messages[0]["chat_id"] == 3002
+
+
+@pytest.mark.asyncio
+async def test_notify_report_status_changed_rejected_includes_reason(notification_fakes):
+    repo, bot = notification_fakes
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.post(
+            "/notifications/report",
+            json={
+                "event": "status_changed",
+                "report_id": REPORT["id"],
+                "new_status": "ditolak",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"sent": 1, "recipients": 1}
+    assert "- Status: Ditolak" in bot.messages[0]["text"]
+    assert "- Alasan: Foto tidak jelas" in bot.messages[0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_notify_report_status_changed_without_telegram_id_returns_reason(notification_fakes, monkeypatch):
+    repo, bot = notification_fakes
+    missing_report = {**REPORT, "reporter_id": "missing-reporter", "user_id": ""}
+    monkeypatch.setattr(repo, "get_report_by_id", lambda report_id: missing_report)
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.post(
+            "/notifications/report",
+            json={
+                "event": "status_changed",
+                "report_id": REPORT["id"],
+                "new_status": "selesai",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"sent": 0, "reason": "reporter_telegram_not_found"}
+    assert repo.link_queries == [("reporter", "missing-reporter")]
     assert bot.messages == []
