@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import threading
 
 # Configure logging FIRST — without this, aiogram's INFO messages are hidden
 logging.basicConfig(
@@ -10,6 +11,16 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def run_fastapi():
+    """Run FastAPI server in a separate thread for receiving webhook notifications."""
+    import uvicorn
+    from app.main import app
+    from app.config import settings
+
+    logger.info("Starting FastAPI notification server on %s:%s", settings.HOST, settings.PORT)
+    uvicorn.run(app, host=settings.HOST, port=settings.PORT, log_level="info")
 
 
 async def run_longpoll():
@@ -26,6 +37,11 @@ async def run_longpoll():
 
 if __name__ == '__main__':
     try:
+        # Start FastAPI in a background thread
+        api_thread = threading.Thread(target=run_fastapi, daemon=True)
+        api_thread.start()
+
+        # Start Telegram polling in the main thread
         asyncio.run(run_longpoll())
     except KeyboardInterrupt:
         logger.info("Bot stopped.")
