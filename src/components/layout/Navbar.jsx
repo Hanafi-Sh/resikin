@@ -40,7 +40,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 glass border-b border-slate-200/50">
+    <header className="sticky top-0 z-50 glass border-b border-slate-200/50 backdrop-blur-sm">
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -60,7 +60,7 @@ export default function Navbar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                  'px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200',
                   pathname === item.href
                     ? 'text-emerald-700 bg-emerald-50'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -72,7 +72,7 @@ export default function Navbar() {
           </div>
 
           {/* Desktop CTA */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-3 font-bold">
             {user ? (
               <>
                 <Link href="/dashboard">
@@ -110,7 +110,7 @@ export default function Navbar() {
                   href={item.href}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={cn(
-                    'px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                    'px-4 py-2.5 rounded-lg text-sm font-bold transition-colors',
                     pathname === item.href
                       ? 'text-emerald-700 bg-emerald-50'
                       : 'text-slate-600 hover:bg-slate-50'
@@ -119,7 +119,7 @@ export default function Navbar() {
                   {item.label}
                 </Link>
               ))}
-              <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-100">
+              <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-100 font-bold">
                 {user ? (
                   <>
                     <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>

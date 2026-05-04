@@ -228,10 +228,10 @@ Menggunakan **Supabase** (PostgreSQL). File migration yang harus dijalankan:
 | No | Nama | Role |
 |----|------|------|
 | 1 | *(isi)* | Project Manager & Product Owner |
-| 2 | *(isi)* | UI/UX Designer |
+| 2 | *(isi)* | AI Engineer |
 | 3 | *(isi)* | Frontend Developer |
 | 4 | *(isi)* | Backend Developer |
-| 5 | *(isi)* | Fullstack Developer |
+| 5 | *(isi)* | Business |
 
 ## 📅 Timeline
 

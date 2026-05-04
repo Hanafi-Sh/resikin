@@ -128,7 +128,7 @@ export default function HomePage() {
                   </Button>
                 </Link>
                 <Link href="/tracking">
-                  <Button variant="outline" size="xl" className="border-emerald-400/30 text-emerald-300 hover:bg-emerald-500/10">
+                  <Button variant="outline" size="xl" className="border-emerald-400/30 text-white hover:bg-emerald-500/10">
                     Lacak Laporan
                   </Button>
                 </Link>
@@ -150,7 +150,7 @@ export default function HomePage() {
             </div>
 
             {/* Right: Visual Card */}
-            <div className="hidden lg:block animate-fade-in-up delay-300">
+            <div className="lg:block animate-fade-in-up delay-300">
               <div className="relative">
                 {/* Main card */}
                 <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 space-y-6">
@@ -162,7 +162,10 @@ export default function HomePage() {
                       </div>
                       <div>
                         <p className="text-white font-semibold text-sm">Dashboard Hari Ini</p>
-                        <p className="text-slate-400 text-xs">23 April 2026</p>
+                          {(() => {
+                            const today = new Date().toLocaleDateString();
+                            return <p  className="text-slate-400 text-xs">{today}</p>;
+                          })()}
                       </div>
                     </div>
                     <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-medium rounded-full">
@@ -188,13 +191,13 @@ export default function HomePage() {
                   <div className="space-y-3">
                     {[
                       { cat: 'Sampah Tidak Terangkut', status: 'Dalam Proses', statusColor: 'text-amber-400', area: 'RW 05' },
-                      { cat: 'TPS Penuh', status: 'Ditugaskan', statusColor: 'text-indigo-400', area: 'RW 02' },
-                      { cat: 'Sampah Liar', status: 'Diterima', statusColor: 'text-sky-400', area: 'RW 08' },
+                      { cat: 'TPS Penuh', status: 'Ditugaskan', statusColor: 'text-sky-400', area: 'RW 02' },
+                      { cat: 'Sampah Liar', status: 'Diterima', statusColor: 'text-emerald-400', area: 'RW 08' },
                     ].map((item, i) => (
                       <div key={i} className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-3">
                         <div>
                           <p className="text-white text-sm font-medium">{item.cat}</p>
-                          <p className="text-slate-500 text-xs">{item.area}</p>
+                          <p className="text-slate-400 text-xs">{item.area}</p>
                         </div>
                         <span className={`text-xs font-medium ${item.statusColor}`}>{item.status}</span>
                       </div>
@@ -203,12 +206,12 @@ export default function HomePage() {
                 </div>
 
                 {/* Floating badge */}
-                <div className="absolute -top-4 -right-4 bg-emerald-500 text-white px-4 py-2 rounded-2xl shadow-lg shadow-emerald-500/25 animate-float">
+                {/* <div className="absolute -top-4 -right-4 bg-emerald-500 text-white px-4 py-2 rounded-2xl shadow-lg shadow-emerald-500/25">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" />
                     <span className="text-sm font-semibold">Laporan Selesai!</span>
                   </div>
-                </div>
+                </div> */}
               </div>
             </div>
           </div>
@@ -246,7 +249,7 @@ export default function HomePage() {
       <section className="py-24 bg-white" id="cara-kerja">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <span className="text-sm font-semibold text-emerald-600 uppercase tracking-wider">
+            <span className="text-lg font-semibold text-emerald-600 uppercase tracking-wider">
               Cara Kerja
             </span>
             <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-slate-900">
@@ -264,14 +267,14 @@ export default function HomePage() {
                 <div key={item.step} className="relative group">
                   {/* Connector line */}
                   {i < steps.length - 1 && (
-                    <div className="hidden md:block absolute top-12 left-[60%] w-[calc(100%-20%)] h-0.5 bg-slate-200">
-                      <div className="absolute right-0 -top-1 w-2.5 h-2.5 border-r-2 border-t-2 border-slate-300 rotate-45" />
+                    <div className="md:block absolute -bottom-5 left-[40%] md:top-12 md:left-[60%] w-[20%] md:w-[80%] md:rotate-0 rotate-90 h-0.5 bg-slate-200">
+                      <div className="absolute right-0 -top-1 w-1 h-1 border-r-2 border-t-2 border-slate-300 rotate-45" />
                     </div>
                   )}
 
                   <Card hover className="text-center p-8 relative overflow-hidden group-hover:border-emerald-200 transition-colors">
                     {/* Step number watermark */}
-                    <span className="absolute top-4 right-6 text-7xl font-black text-slate-100 select-none">
+                    <span className="absolute top-4 left-6 text-3xl font-black text-black select-none">
                       {item.step}
                     </span>
 
@@ -295,7 +298,7 @@ export default function HomePage() {
       <section className="py-24 bg-slate-50" id="fitur">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <span className="text-sm font-semibold text-emerald-600 uppercase tracking-wider">
+            <span className="text-lg font-semibold text-emerald-600 uppercase tracking-wider">
               Fitur Unggulan
             </span>
             <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-slate-900">
@@ -310,13 +313,13 @@ export default function HomePage() {
             {features.map((feature) => {
               const Icon = feature.icon;
               return (
-                <Card key={feature.title} hover className="p-6 flex gap-5">
+                <Card key={feature.title} hover className="p-6 flex gap-5 bg-gradient-emerald">
                   <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
                     <Icon className="w-6 h-6 text-emerald-600" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900 mb-2">{feature.title}</h3>
-                    <p className="text-sm text-slate-500 leading-relaxed">{feature.description}</p>
+                    <h3 className="text-lg font-bold text-white mb-2">{feature.title}</h3>
+                    <p className="text-sm text-slate-50 leading-relaxed">{feature.description}</p>
                   </div>
                 </Card>
               );
