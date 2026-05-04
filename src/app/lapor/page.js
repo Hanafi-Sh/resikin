@@ -75,7 +75,7 @@ export default function LaporPage() {
     }));
     setErrors(prev => ({ ...prev, photos: '' }));
 
-    // AI Validation (Soft Block)
+    // AI Validation (Soft Block & Category Suggestion)
     setIsAnalyzing(true);
     setAiWarning('');
     try {
@@ -89,8 +89,25 @@ export default function LaporPage() {
             body: JSON.stringify({ image: reader.result })
           });
           const aiData = await aiRes.json();
-          if (aiData.success && !aiData.isWaste) {
-            setAiWarning(`Peringatan AI: Gambar ini terdeteksi sebagai "${aiData.top_label}", bukan masalah sampah. Anda tetap dapat melanjutkan jika merasa AI keliru.`);
+          if (aiData.success) {
+            if (!aiData.isWaste) {
+              // Jika terdeteksi bukan sampah (Spam)
+              setAiWarning(`Peringatan AI: Gambar ini terdeteksi sebagai "${aiData.top_label}", bukan masalah sampah. Anda tetap dapat melanjutkan jika merasa AI keliru.`);
+            } else if (aiData.suggested_category) {
+              // Jika terdeteksi sebagai sampah dan AI memberikan saran kategori
+              const categoryNames = {
+                'tps_penuh': 'TPS Penuh',
+                'sampah_liar': 'Sampah Liar',
+                'tidak_terangkut': 'Sampah Tidak Terangkut'
+              };
+              const humanReadable = categoryNames[aiData.suggested_category] || aiData.suggested_category;
+              
+              // Set kategori secara otomatis di form
+              updateField('category', aiData.suggested_category);
+              
+              // Tampilkan pesan sukses berwarna hijau (atau peringatan ringan)
+              setAiWarning(`✨ AI Assistant mendeteksi gambar ini sebagai "${humanReadable}". Kategori formulir telah diisi otomatis.`);
+            }
           }
         } catch (e) {}
         setIsAnalyzing(false);

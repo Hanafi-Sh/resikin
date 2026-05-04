@@ -36,48 +36,51 @@ export async function POST(request) {
     }
 
     // 3. Ambil semua assignment aktif untuk menghitung beban kerja (workload)
-    // Asumsi: tugas yang report-nya belum 'selesai' dianggap aktif
     const { data: activeAssignments, error: assignError } = await supabase
       .from('assignments')
       .select('petugas_id, reports!inner(status)')
       .neq('reports.status', 'selesai');
 
-    // Hitung beban kerja masing-masing petugas
-    const workloadMap = {};
-    petugasList.forEach(p => { workloadMap[p.id] = 0; });
+    const assignmentsPayload = activeAssignments ? activeAssignments.map(a => ({
+      petugas_id: a.petugas_id,
+      status: a.reports.status
+    })) : [];
 
-    if (activeAssignments) {
-      activeAssignments.forEach(a => {
-        if (workloadMap[a.petugas_id] !== undefined) {
-          workloadMap[a.petugas_id] += 1;
-        }
+    // URL Python AI Microservice
+    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+    const endpoint = `${aiServiceUrl}/api/ai/recommend-assignment`;
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          report_id: report_id,
+          category: report.category,
+          petugas_list: petugasList,
+          active_assignments: assignmentsPayload
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`AI Service responded with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      return NextResponse.json(result);
+
+    } catch (fetchError) {
+      console.error('[AI] Gagal menghubungi AI Microservice:', fetchError.message);
+      // Fallback sederhana jika AI Service down
+      return NextResponse.json({
+        success: true,
+        recommended_petugas_id: petugasList[0].id,
+        recommended_petugas_name: petugasList[0].name,
+        reason: "Fallback: AI Service sedang offline, menggunakan petugas pertama yang tersedia."
       });
     }
-
-    // 4. Algoritma Rekomendasi Pintar (Heuristik AI Logistik)
-    // Cari petugas dengan beban kerja paling rendah
-    let bestPetugas = null;
-    let minLoad = Infinity;
-
-    petugasList.forEach(p => {
-      const load = workloadMap[p.id];
-      // Jika beban sama, kita bisa tambah logika acak agar distribusi merata,
-      // atau pertimbangkan jarak lokasi (jika koordinat live petugas tersedia).
-      if (load < minLoad) {
-        minLoad = load;
-        bestPetugas = p;
-      }
-    });
-
-    // 5. Generate reasoning string
-    const reason = `Sistem merekomendasikan ${bestPetugas.name} karena memiliki beban kerja terendah saat ini (hanya ${minLoad} tugas aktif), sehingga penanganan laporan "${report.category}" ini bisa lebih cepat.`;
-
-    return NextResponse.json({
-      success: true,
-      recommended_petugas_id: bestPetugas.id,
-      recommended_petugas_name: bestPetugas.name,
-      reason: reason
-    });
 
   } catch (error) {
     console.error('Error in recommend-petugas API:', error);
