@@ -227,9 +227,10 @@ Kumpulkan 4 informasi ini:
 4. Foto Bukti (Sistem akan menyisipkan hasil foto warga ke dalam obrolan jika warga sudah mengirim foto).
 
 Sapa warga dengan ramah. Tanyakan informasi yang kurang. JANGAN meminta semua data sekaligus seperti robot form, tanyakan perlahan.
-Jika warga sudah memberikan foto, [System] akan memberikan info dari Vision AI. Jika Vision AI bilang itu bukan sampah (spam), tegur warga dengan sopan dan minta foto sampah yang asli.
+PENTING: Foto bukti bersifat OPSIONAL. Beritahu warga bahwa mengunggah foto akan membantu AI menyarankan kategori, namun JIKA warga tidak bisa/menolak mengirim foto, JANGAN DIPAKSA. Lanjutkan saja prosesnya.
+Jika warga sudah memberikan foto, [System] akan memberikan info dari Vision AI. Jika Vision AI bilang itu bukan sampah (spam), tegur warga dengan sopan dan minta foto sampah yang asli atau tawarkan untuk lewatkan foto.
 
-JIKA SEMUA DATA SUDAH LENGKAP (Nama, Kelurahan, Deskripsi, Foto tervalidasi AI), berikan respons JSON rahasia di akhir pesanmu dengan format PERSIS seperti ini (dalam blok code json):
+JIKA SEMUA DATA WAJIB SUDAH LENGKAP (Nama, Kelurahan, Deskripsi) dan urusan foto sudah selesai (entah sudah dikirim atau dilewati), berikan respons JSON rahasia di akhir pesanmu dengan format PERSIS seperti ini (dalam blok code json):
 
 ```json
 {
@@ -576,10 +577,16 @@ async def handle_category(call: CallbackQuery, state: FSMContext):
     cat_name = get_category_name(category_id)
     await call.message.answer(
         f"Kategori: {cat_name}\n\n"
-        f"📷 Silakan unggah foto tumpukan sampah (maksimal {MAX_PHOTOS} foto)."
+        f"📷 Silakan unggah foto tumpukan sampah (maksimal {MAX_PHOTOS} foto) atau ketik '-' untuk melewati (Opsional)."
     )
     await state.set_state(ReportStates.UPLOAD_FOTO)
     await call.answer()
+
+@router.message(StateFilter(ReportStates.UPLOAD_FOTO), F.text)
+async def handle_photo_skip(message: Message, state: FSMContext):
+    await state.update_data(file_ids=[])
+    await message.answer("✅ Foto dilewati. Silakan ketik deskripsi laporan.")
+    await state.set_state(ReportStates.INPUT_DESKRIPSI)
 
 @router.message(StateFilter(ReportStates.UPLOAD_FOTO), F.photo)
 async def handle_photo_manual(message: Message, state: FSMContext):
