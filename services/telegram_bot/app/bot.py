@@ -225,12 +225,15 @@ Kumpulkan 4 informasi ini:
 2. Kelurahan (harus dicocokkan dengan salah satu dari 45 kelurahan di Kota Yogyakarta).
 3. Deskripsi Masalah (apa yang terjadi, misalnya bau, menumpuk, dll).
 4. Foto Bukti (Sistem akan menyisipkan hasil foto warga ke dalam obrolan jika warga sudah mengirim foto).
+5. Lokasi GPS (wajib menekan tombol 'Bagikan Lokasi' di bawah layar atau mengirimkan lokasi via attachment).
+
+Sapa warga dengan ramah. Tanyakan informasi yang kurang. Jangan proses laporan jika warga BELUM membagikan lokasi GPS!
 
 Sapa warga dengan ramah. Tanyakan informasi yang kurang. JANGAN meminta semua data sekaligus seperti robot form, tanyakan perlahan.
 PENTING: Foto bukti bersifat OPSIONAL. Beritahu warga bahwa mengunggah foto akan membantu AI menyarankan kategori, namun JIKA warga tidak bisa/menolak mengirim foto, JANGAN DIPAKSA. Lanjutkan saja prosesnya.
 Jika warga sudah memberikan foto, [System] akan memberikan info dari Vision AI. Jika Vision AI bilang itu bukan sampah (spam), tegur warga dengan sopan dan minta foto sampah yang asli atau tawarkan untuk lewatkan foto.
 
-JIKA SEMUA DATA WAJIB SUDAH LENGKAP (Nama, Kelurahan, Deskripsi) dan urusan foto sudah selesai (entah sudah dikirim atau dilewati), berikan respons JSON rahasia di akhir pesanmu dengan format PERSIS seperti ini (dalam blok code json):
+JIKA SEMUA DATA WAJIB SUDAH LENGKAP (Nama, Kelurahan, Deskripsi) dan [System] telah mengonfirmasi bahwa warga sudah menekan tombol 'Bagikan Lokasi' atau mengirim lokasi manual (wajib),, berikan respons JSON rahasia di akhir pesanmu dengan format PERSIS seperti ini (dalam blok code json):
 
 ```json
 {
@@ -279,17 +282,23 @@ async def process_llm_response(user_id: int, message: Message, reply_text: str, 
             data = json.loads(json_str)
             if data.get("status") == "complete":
                 text_part = reply_text[:match.start()].strip()
+                from aiogram.types import ReplyKeyboardRemove
                 if text_part:
-                    await message.answer(text_part)
+                    await message.answer(text_part, reply_markup=ReplyKeyboardRemove())
                 else:
-                    await message.answer("Laporan Anda sudah lengkap, sedang kami proses...")
+                    await message.answer("Laporan Anda sudah lengkap, sedang kami proses...", reply_markup=ReplyKeyboardRemove())
                 
                 await save_report(user_id, data["data"], message)
                 return
         except Exception as e:
             logger.error(f"Failed to parse JSON from LLM: {e}")
     
-    await message.answer(reply_text)
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    loc_kb = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📍 Bagikan Lokasi Saat Ini", request_location=True)]],
+        resize_keyboard=True
+    )
+    await message.answer(reply_text, reply_markup=loc_kb)
 
 async def save_report(user_id: int, data: dict, message: Message):
     try:
@@ -317,8 +326,8 @@ async def save_report(user_id: int, data: dict, message: Message):
             category=data.get("suggested_category", "lainnya"),
             file_ids=user_state.get(user_id, {}).get("file_ids", []),
             description=data.get("description", ""),
-            latitude=None,
-            longitude=None,
+            latitude=user_state.get(user_id, {}).get("latitude"),
+            longitude=user_state.get(user_id, {}).get("longitude"),
             status="dikirim",
             source="telegram",
             metadata={}
@@ -444,6 +453,31 @@ async def handle_text_llm(message: Message, state: FSMContext):
         await message.answer("⚠️ Sistem AI cerdas kami gagal memproses setelah 3 kali percobaan. Jangan khawatir, mari alihkan ke form manual.")
         await _force_fallback(message, state)
 
+
+@router.message(StateFilter(None), F.location)
+async def handle_location_llm(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    if user_id not in chat_history:
+        chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        user_state[user_id] = {"file_ids": [], "suggested_category": None}
+        
+    lat = message.location.latitude
+    lon = message.location.longitude
+    user_state[user_id]["latitude"] = lat
+    user_state[user_id]["longitude"] = lon
+    
+    system_note = f"[System] Warga telah membagikan lokasi GPS yang valid: Latitude {lat}, Longitude {lon}. Lanjutkan proses atau keluarkan JSON jika semua data sudah lengkap."
+    chat_history[user_id].append({"role": "system", "content": system_note})
+    
+    bot = get_bot()
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    
+    try:
+        reply = await call_deepseek(user_id)
+        await process_llm_response(user_id, message, reply, state)
+    except DeepSeekTimeoutError:
+        await message.answer("⚠️ Sistem AI sedang gangguan jaringan. Mari beralih ke form manual.", reply_markup=ReplyKeyboardRemove())
+        await _force_fallback(message, state)
 
 @router.message(StateFilter(None), F.photo)
 async def handle_photo_llm(message: Message, state: FSMContext):
@@ -638,23 +672,28 @@ async def handle_photo_manual(message: Message, state: FSMContext):
 @router.message(StateFilter(ReportStates.INPUT_DESKRIPSI))
 async def handle_description(message: Message, state: FSMContext):
     await state.update_data(description=message.text)
-    await message.answer("📍 Silakan bagikan lokasi (share location) atau ketik '-' jika tidak tahu koordinatnya.")
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    loc_kb = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📍 Bagikan Lokasi Saat Ini", request_location=True)]],
+        resize_keyboard=True
+    )
+    await message.answer("📍 Lokasi wajib diisi untuk memudahkan petugas! Silakan tekan tombol 'Bagikan Lokasi Saat Ini' di bawah, atau gunakan menu Lampiran (📎) -> Lokasi untuk memilih titik di peta secara manual jika Anda tidak berada di lokasi.", reply_markup=loc_kb)
     await state.set_state(ReportStates.SHARE_LOCATION)
 
 @router.message(StateFilter(ReportStates.SHARE_LOCATION))
 async def handle_location(message: Message, state: FSMContext):
+    if not message.location:
+        await message.answer("⚠️ Laporan tidak bisa dilanjutkan tanpa lokasi. Silakan tekan tombol '📍 Bagikan Lokasi Saat Ini' atau kirimkan via menu Lampiran (📎).")
+        return
+
     data = await state.get_data()
     
-    if message.location:
-        await state.update_data(
-            latitude=message.location.latitude,
-            longitude=message.location.longitude,
-        )
-        lat = message.location.latitude
-        lon = message.location.longitude
-    else:
-        lat = "-"
-        lon = "-"
+    await state.update_data(
+        latitude=message.location.latitude,
+        longitude=message.location.longitude,
+    )
+    lat = message.location.latitude
+    lon = message.location.longitude
 
     kelurahan_id = data.get("kelurahan_id", "-")
     kel_name = get_kelurahan_name(kelurahan_id)
@@ -675,6 +714,9 @@ async def handle_location(message: Message, state: FSMContext):
     builder.button(text="✅ Konfirmasi", callback_data="confirm:yes")
     builder.button(text="❌ Batal", callback_data="confirm:no")
     kb = builder.as_markup()
+    # Remove the location keyboard before sending the inline keyboard
+    from aiogram.types import ReplyKeyboardRemove
+    await message.answer("Lokasi diterima.", reply_markup=ReplyKeyboardRemove())
     await message.answer(summary, reply_markup=kb)
     await state.set_state(ReportStates.KONFIRMASI)
 
