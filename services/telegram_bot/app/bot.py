@@ -222,12 +222,12 @@ SYSTEM_PROMPT = """Kamu adalah Asisten ResikIn, bot pelaporan sampah di Yogyakar
 Tugas utamamu adalah mengumpulkan laporan masalah sampah dari warga melalui percakapan alami yang santai.
 Kumpulkan 4 informasi ini:
 1. Nama Pelapor
-2. Kelurahan (harus dicocokkan dengan salah satu dari 45 kelurahan di Kota Yogyakarta).
+2. Kelurahan (Sistem akan otomatis mendeteksi dari GPS. Jika belum terdeteksi, tanyakan. Jika sudah, JANGAN tanyakan lagi).
 3. Deskripsi Masalah (apa yang terjadi, misalnya bau, menumpuk, dll).
 4. Foto Bukti (Sistem akan menyisipkan hasil foto warga ke dalam obrolan jika warga sudah mengirim foto).
 5. Lokasi GPS (wajib menekan tombol 'Bagikan Lokasi' di bawah layar atau mengirimkan lokasi via attachment).
 
-Sapa warga dengan ramah. Tanyakan informasi yang kurang. Jangan proses laporan jika warga BELUM membagikan lokasi GPS!
+Sapa warga dengan ramah. Tanyakan informasi yang kurang. Jangan proses laporan jika warga BELUM membagikan lokasi GPS! JIKA WARGA SUDAH MEMBERIKAN LOKASI GPS, MAKA ANGGAP PERSYARATAN KELURAHAN SUDAH TERPENUHI, JANGAN TANYAKAN LAGI.
 
 Sapa warga dengan ramah. Tanyakan informasi yang kurang. JANGAN meminta semua data sekaligus seperti robot form, tanyakan perlahan.
 PENTING: Foto bukti bersifat OPSIONAL. Beritahu warga bahwa mengunggah foto akan membantu AI menyarankan kategori, namun JIKA warga tidak bisa/menolak mengirim foto, JANGAN DIPAKSA. Lanjutkan saja prosesnya.
@@ -492,7 +492,26 @@ async def handle_location_llm(message: Message, state: FSMContext):
     user_state[user_id]["latitude"] = lat
     user_state[user_id]["longitude"] = lon
     
-    system_note = f"[System] Warga telah membagikan lokasi GPS yang valid: Latitude {lat}, Longitude {lon}. Lanjutkan proses atau keluarkan JSON jika semua data sudah lengkap."
+    # Lakukan Reverse Geocoding secara diam-diam
+    import aiohttp
+    kelurahan_detected = ""
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
+            async with session.get(url, headers={'User-Agent': 'ResikinBot/1.0'}, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    addr = data.get("address", {})
+                    # Cari nama desa/kelurahan
+                    kelurahan_detected = addr.get("village") or addr.get("suburb") or addr.get("town") or ""
+    except Exception:
+        pass
+
+    if kelurahan_detected:
+        system_note = f"[System] Warga telah membagikan lokasi GPS (Lat: {lat}, Lon: {lon}). Berdasarkan GPS, lokasi ini berada di Kelurahan {kelurahan_detected}. Anggap syarat 'Kelurahan' sudah lengkap dan JANGAN tanyakan lagi soal kelurahan. Lanjutkan proses atau keluarkan JSON."
+    else:
+        system_note = f"[System] Warga telah membagikan lokasi GPS (Lat: {lat}, Lon: {lon}). Anggap saja syarat lokasi sudah lengkap. Keluarkan JSON jika data lain sudah lengkap."
+        
     chat_history[user_id].append({"role": "system", "content": system_note})
     
     bot = get_bot()
