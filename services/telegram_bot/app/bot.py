@@ -440,7 +440,7 @@ async def cmd_start(message: Message, state: FSMContext):
             keyboard=[[KeyboardButton(text="📱 Bagikan Nomor Telepon", request_contact=True)]],
             resize_keyboard=True, one_time_keyboard=True
         )
-        await message.answer("Selamat datang di ResikIn! 🙌\n\nUntuk memulai, kami perlu mengamankan kontak Anda untuk keperluan petugas.\n\nSilakan tekan tombol **'📱 Bagikan Nomor Telepon'** di bawah untuk membagikannya secara otomatis dari profil Telegram Anda.", reply_markup=contact_kb, parse_mode="Markdown")
+        await message.answer("Selamat datang di ResikIn! 🙌\n\nUntuk memulai, kami butuh nomor telepon Anda untuk keperluan petugas saat menindaklanjuti laporan.\n\nSilakan ketik nomor telepon Anda secara manual (contoh: 08123456789) ATAU tekan tombol **'📱 Bagikan Nomor Telepon'** di bawah.", reply_markup=contact_kb, parse_mode="Markdown")
         await state.set_state(ReportStates.INPUT_TELEPON)
         return
 
