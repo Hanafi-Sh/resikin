@@ -508,21 +508,40 @@ async def handle_location_llm(message: Message, state: FSMContext):
         pass
 
     if kelurahan_detected:
-        system_note = f"[System] Warga telah membagikan lokasi GPS (Lat: {lat}, Lon: {lon}). Berdasarkan GPS, lokasi ini berada di Kelurahan {kelurahan_detected}. Anggap syarat 'Kelurahan' sudah lengkap dan JANGAN tanyakan lagi soal kelurahan. Lanjutkan proses atau keluarkan JSON."
+        system_note = f"[System] Warga telah membagikan lokasi GPS (Lat: {lat}, Lon: {lon}). Berdasarkan GPS, lokasi ini berada di Kelurahan {kelurahan_detected}. Syarat 'Kelurahan' dan 'Lokasi GPS' sudah LENGKAP. JANGAN tanyakan lagi soal kelurahan atau lokasi!"
+        user_state[user_id]["kelurahan_detected"] = kelurahan_detected
     else:
-        system_note = f"[System] Warga telah membagikan lokasi GPS (Lat: {lat}, Lon: {lon}). Anggap syarat 'Lokasi GPS' dan 'Kelurahan' sudah LENGKAP dan TERPENUHI. JANGAN tanyakan lagi soal kelurahan atau lokasi! Lanjutkan proses atau keluarkan JSON jika data lain sudah lengkap."
+        system_note = f"[System] Warga telah membagikan lokasi GPS (Lat: {lat}, Lon: {lon}). Syarat 'Lokasi GPS' dan 'Kelurahan' sudah LENGKAP dan TERPENUHI. JANGAN tanyakan lagi soal kelurahan atau lokasi!"
         
     chat_history[user_id].append({"role": "system", "content": system_note})
     
-    bot = get_bot()
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    # Langsung konfirmasi tanpa tanya AI lagi (agar tidak mengulangi "kirim GPS")
+    kel_text = f" di Kelurahan {kelurahan_detected}" if kelurahan_detected else ""
+    confirm_msg = f"📍 Lokasi GPS{kel_text} sudah diterima, terima kasih! 😊"
+    chat_history[user_id].append({"role": "assistant", "content": confirm_msg})
     
-    try:
-        reply = await call_deepseek(user_id)
-        await process_llm_response(user_id, message, reply, state)
-    except DeepSeekTimeoutError:
-        await message.answer("⚠️ Sistem AI sedang gangguan jaringan. Mari beralih ke form manual.", reply_markup=ReplyKeyboardRemove())
-        await _force_fallback(message, state)
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    loc_kb = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📍 Bagikan Lokasi Saat Ini", request_location=True)]],
+        resize_keyboard=True
+    )
+    await message.answer(confirm_msg, reply_markup=loc_kb)
+    
+    # Cek apakah data lain sudah lengkap, jika ya langsung panggil AI untuk keluarkan JSON
+    has_name = any("reporter_name" in str(m.get("content","")) for m in chat_history[user_id] if m["role"] == "assistant")
+    has_desc = any("deskripsi" in str(m.get("content","")).lower() or "catat" in str(m.get("content","")).lower() for m in chat_history[user_id] if m["role"] == "assistant")
+    
+    if has_name and has_desc:
+        # Semua data sudah ada, minta AI finalisasi
+        chat_history[user_id].append({"role": "system", "content": "[System] Semua data sudah lengkap (Nama, Deskripsi, Lokasi GPS). Segera keluarkan JSON final!"})
+        bot = get_bot()
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        try:
+            reply = await call_deepseek(user_id)
+            await process_llm_response(user_id, message, reply, state)
+        except DeepSeekTimeoutError:
+            await message.answer("⚠️ Sistem AI sedang gangguan. Mari beralih ke form manual.", reply_markup=ReplyKeyboardRemove())
+            await _force_fallback(message, state)
 
 @router.message(StateFilter(None), F.photo)
 async def handle_photo_llm(message: Message, state: FSMContext):
