@@ -307,8 +307,11 @@ async def save_report(user_id: int, data: dict, message: Message):
         
         reporter_name = data.get("reporter_name", "Anonim")
         existing_reporter = await asyncio.to_thread(repo.find_reporter_by_telegram_id, telegram_id)
+        
+        reporter_phone = ""
         if existing_reporter:
             reporter_id = existing_reporter["id"]
+            reporter_phone = existing_reporter.get("phone", "")
         else:
             created = await asyncio.to_thread(repo.create_reporter, {
                 "telegram_id": telegram_id,
@@ -321,7 +324,7 @@ async def save_report(user_id: int, data: dict, message: Message):
             user_id=telegram_id,
             reporter_id=reporter_id,
             reporter_name=reporter_name,
-            reporter_phone="",
+            reporter_phone=reporter_phone,
             kelurahan_id=data.get("kelurahan_id", "unknown"),
             category=data.get("suggested_category", "lainnya"),
             file_ids=user_state.get(user_id, {}).get("file_ids", []),
@@ -418,6 +421,29 @@ async def cmd_start(message: Message, state: FSMContext):
 
     await state.clear()
     user_id = message.from_user.id
+    
+    # INTERCEPT: Force phone number for new users
+    telegram_id = str(user_id)
+    try:
+        repo = get_repo()
+        existing = await asyncio.to_thread(repo.find_reporter_by_telegram_id, telegram_id)
+    except:
+        existing = None
+
+    if not existing or not existing.get("phone"):
+        await state.update_data(
+            telegram_id=telegram_id,
+            reporter_name=_get_telegram_name(message.from_user),
+        )
+        from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+        contact_kb = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="📱 Bagikan Nomor Telepon", request_contact=True)]],
+            resize_keyboard=True, one_time_keyboard=True
+        )
+        await message.answer("Selamat datang di ResikIn! 🙌\n\nUntuk memulai, kami perlu mengamankan kontak Anda untuk keperluan petugas.\n\nSilakan tekan tombol **'📱 Bagikan Nomor Telepon'** di bawah untuk membagikannya secara otomatis dari profil Telegram Anda.", reply_markup=contact_kb, parse_mode="Markdown")
+        await state.set_state(ReportStates.INPUT_TELEPON)
+        return
+
     chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
     user_state[user_id] = {"file_ids": [], "suggested_category": None}
     
@@ -573,10 +599,11 @@ async def handle_contact(message: Message, state: FSMContext):
     )
 
     await message.answer(
-        f"✅ Terima kasih! Nomor {phone} tersimpan.",
+        f"✅ Terima kasih! Nomor {phone} berhasil diamankan.",
         reply_markup=ReplyKeyboardRemove(),
     )
-    await _show_kelurahan_picker(message, state)
+    # Redirect back to LLM flow by calling cmd_start programmatically
+    await cmd_start(message, state)
 
 @router.message(StateFilter(ReportStates.INPUT_TELEPON))
 async def handle_phone_text_fallback(message: Message, state: FSMContext):

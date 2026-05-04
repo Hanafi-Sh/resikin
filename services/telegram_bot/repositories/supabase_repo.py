@@ -11,12 +11,23 @@ class SupabaseRepo:
         self.client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
     def insert_report(self, report: dict):
-        """Insert a report dict into the `reports` table."""
+        """Insert a report dict into the `reports` table and create status history."""
         res = self.client.table("reports").insert(report).execute()
         # return the inserted row(s) if available
         try:
-            return res.data
-        except Exception:
+            inserted_data = res.data
+            if inserted_data and len(inserted_data) > 0:
+                report_id = inserted_data[0].get("id")
+                # Insert initial status history
+                self.client.table("status_history").insert({
+                    "report_id": report_id,
+                    "old_status": None,
+                    "new_status": "dikirim",
+                    "notes": "Laporan dibuat melalui bot Telegram"
+                }).execute()
+            return inserted_data
+        except Exception as e:
+            print("Error inserting status history:", e)
             return res
 
     def find_reporter_by_telegram_id(self, telegram_id: str) -> Optional[Dict]:
