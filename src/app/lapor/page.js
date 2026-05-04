@@ -92,7 +92,16 @@ export default function LaporPage() {
           if (aiData.success) {
             if (!aiData.isWaste) {
               // Jika terdeteksi bukan sampah (Spam)
-              setAiWarning(`Peringatan AI: Gambar ini terdeteksi sebagai "${aiData.top_label}", bukan masalah sampah. Anda tetap dapat melanjutkan jika merasa AI keliru.`);
+              const spamNames = {
+                'a clean street, park, or beautiful scenery': 'Pemandangan Bersih',
+                'a selfie photo of a person or human face': 'Foto Wajah / Selfie',
+                'a pet cat, dog, or animal': 'Hewan / Binatang Peliharaan',
+                'food, drink, or meal on a table': 'Makanan / Minuman',
+                'an indoor room, bedroom, or furniture': 'Ruangan / Perabotan',
+                'a text document, meme, or screenshot': 'Dokumen / Tangkapan Layar'
+              };
+              const labelIndo = spamNames[aiData.top_label] || 'Bukan Sampah';
+              setAiWarning(`Peringatan AI: Gambar ini terdeteksi sebagai "${labelIndo}". Anda tetap dapat melanjutkan jika merasa AI keliru.`);
             } else if (aiData.suggested_category) {
               // Jika terdeteksi sebagai sampah dan AI memberikan saran kategori
               const categoryNames = {
