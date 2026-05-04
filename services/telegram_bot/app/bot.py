@@ -605,6 +605,8 @@ async def handle_contact(message: Message, state: FSMContext):
         existing = await asyncio.to_thread(repo.find_reporter_by_telegram_id, telegram_id)
         if existing:
             reporter_id = existing["id"]
+            if not existing.get("phone"):
+                await asyncio.to_thread(repo.update_reporter, reporter_id, {"phone": phone})
         else:
             created = await asyncio.to_thread(repo.create_reporter, reporter_model.dict_for_db())
             reporter_id = created["id"] if created else None

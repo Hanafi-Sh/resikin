@@ -45,6 +45,9 @@ class SupabaseRepo:
             return data[0]
         return None
 
+    def update_reporter(self, reporter_id: str, updates: dict) -> None:
+        self.client.table("reporters").update(updates).eq("id", reporter_id).execute()
+
     def create_reporter(self, reporter: dict) -> Optional[Dict]:
         """Insert a new reporter into the `reporters` table.
         Returns the inserted reporter dict.
