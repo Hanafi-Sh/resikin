@@ -53,7 +53,7 @@ export default function InfoPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-12">
-          <span className="text-sm font-semibold text-emerald-600 uppercase tracking-wider">
+          <span className="text-lg font-semibold text-emerald-600 uppercase tracking-wider">
             Informasi Kebersihan
           </span>
           <h1 className="mt-3 text-3xl sm:text-4xl font-bold text-slate-900">
@@ -81,15 +81,18 @@ export default function InfoPage() {
         </div>
 
         {/* CTA */}
-        <div className="text-center bg-white rounded-2xl border border-slate-200 p-8 sm:p-12">
-          <h2 className="text-2xl font-bold text-slate-900 mb-3">
+        <div className="text-center bg-white rounded-2xl border border-slate-200 bg-gradient-emerald p-10 sm:p-16 relative overflow-hidden" >
+          <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+          <div className="absolute bottom-0 left-0 w-60 h-60 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+          
+          <h2 className="text-2xl font-bold text-white mb-3">
             Temukan Masalah Sampah?
           </h2>
-          <p className="text-slate-500 mb-6 max-w-md mx-auto">
+          <p className="text-emerald-100 mb-6 max-w-md mx-auto">
             Jangan ragu untuk melaporkannya. Setiap laporan membantu menjaga kebersihan lingkungan kita.
           </p>
           <Link href="/lapor">
-            <Button size="lg">
+            <Button size="lg" variant='secondary'>
               Laporkan Sekarang
               <ArrowRight className="w-4 h-4" />
             </Button>
