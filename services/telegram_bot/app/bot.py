@@ -527,21 +527,16 @@ async def handle_location_llm(message: Message, state: FSMContext):
     )
     await message.answer(confirm_msg, reply_markup=loc_kb)
     
-    # Cek apakah data lain sudah lengkap, jika ya langsung panggil AI untuk keluarkan JSON
-    has_name = any("reporter_name" in str(m.get("content","")) for m in chat_history[user_id] if m["role"] == "assistant")
-    has_desc = any("deskripsi" in str(m.get("content","")).lower() or "catat" in str(m.get("content","")).lower() for m in chat_history[user_id] if m["role"] == "assistant")
-    
-    if has_name and has_desc:
-        # Semua data sudah ada, minta AI finalisasi
-        chat_history[user_id].append({"role": "system", "content": "[System] Semua data sudah lengkap (Nama, Deskripsi, Lokasi GPS). Segera keluarkan JSON final!"})
-        bot = get_bot()
-        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        try:
-            reply = await call_deepseek(user_id)
-            await process_llm_response(user_id, message, reply, state)
-        except DeepSeekTimeoutError:
-            await message.answer("⚠️ Sistem AI sedang gangguan. Mari beralih ke form manual.", reply_markup=ReplyKeyboardRemove())
-            await _force_fallback(message, state)
+    # Selalu panggil AI setelah konfirmasi GPS agar percakapan lanjut
+    chat_history[user_id].append({"role": "system", "content": "[System] Lokasi GPS sudah diterima. Lanjutkan tanya data yang masih kurang, atau keluarkan JSON jika semua data sudah lengkap."})
+    bot = get_bot()
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    try:
+        reply = await call_deepseek(user_id)
+        await process_llm_response(user_id, message, reply, state)
+    except DeepSeekTimeoutError:
+        await message.answer("⚠️ Sistem AI sedang gangguan. Mari beralih ke form manual.", reply_markup=ReplyKeyboardRemove())
+        await _force_fallback(message, state)
 
 @router.message(StateFilter(None), F.photo)
 async def handle_photo_llm(message: Message, state: FSMContext):
