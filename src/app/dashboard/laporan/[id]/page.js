@@ -200,7 +200,9 @@ export default function LaporanDetailPage({ params }) {
                   <div key={entry.id} className="flex items-start gap-3">
                     <div className={cn(
                       'w-2.5 h-2.5 rounded-full mt-1.5 shrink-0',
-                      i === (report.status_history.length - 1) ? 'bg-emerald-500' : 'bg-slate-300'
+                      i === (report.status_history.length - 1) && report.status === REPORT_STATUS.DITOLAK
+                        ? 'bg-rose-500'
+                        : (i === (report.status_history.length - 1) ? 'bg-emerald-500' : 'bg-slate-300')
                     )} />
                     <div>
                       <p className="text-sm font-medium text-slate-700">
