@@ -1,6 +1,10 @@
-from aiogram import Bot, Dispatcher, F, Router
-from aiogram.filters import CommandStart, Command
-from aiogram.types import Message
+from aiogram import Bot, Dispatcher, F, Router, BaseMiddleware
+from aiogram.filters import CommandStart, Command, StateFilter
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.context import FSMContext
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, TelegramObject
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.config import settings
 from domain.models import Report, Reporter
 import asyncio
@@ -11,7 +15,7 @@ import base64
 import aiohttp
 from datetime import datetime, timezone
 from app.kelurahan import KELURAHAN_OPTIONS, get_kelurahan_name
-from typing import TYPE_CHECKING, Dict, List
+from typing import TYPE_CHECKING, Dict, List, Any
 from openai import AsyncOpenAI
 
 if TYPE_CHECKING:
@@ -19,7 +23,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-dp = Dispatcher()
+storage = MemoryStorage()
+dp = Dispatcher(storage=storage)
 router = Router()
 dp.include_router(router)
 
@@ -31,8 +36,123 @@ deepseek_client = AsyncOpenAI(
     base_url="https://api.deepseek.com/v1"
 )
 
+# ── Anti Spam & LLM Memory ──
 chat_history: Dict[int, List[dict]] = {}
 user_state: Dict[int, dict] = {} 
+
+class AntiSpamMiddleware(BaseMiddleware):
+    def __init__(self):
+        super().__init__()
+        self.last_msg_time = {}
+        self.daily_stats = {}
+        self.max_chars_per_msg = 2000
+        self.max_chars_per_day = 50000
+        self.max_chats_per_day = 100
+
+    async def __call__(self, handler, event: TelegramObject, data: Dict[str, Any]):
+        if getattr(event, "from_user", None) is None:
+            return await handler(event, data)
+        
+        user_id = event.from_user.id
+        now = datetime.now(timezone.utc)
+        now_ts = now.timestamp()
+        today = now.strftime("%Y-%m-%d")
+
+        # 1. Cooldown 2 seconds
+        last_time = self.last_msg_time.get(user_id, 0)
+        if now_ts - last_time < 2.0:
+            return # Ignore flood
+
+        self.last_msg_time[user_id] = now_ts
+
+        # 2. Daily limits
+        if user_id not in self.daily_stats or self.daily_stats[user_id]["date"] != today:
+            self.daily_stats[user_id] = {"date": today, "chats": 0, "chars": 0}
+
+        text_length = 0
+        if isinstance(event, Message):
+            if event.text: text_length += len(event.text)
+            if event.caption: text_length += len(event.caption)
+
+            if text_length > self.max_chars_per_msg:
+                await event.answer("⚠️ Pesan terlalu panjang (Maks 2000 karakter).")
+                return
+
+        # Check if FSM is active. If active, we don't count towards LLM limits.
+        state: FSMContext = data.get("state")
+        current_state = await state.get_state() if state else None
+        
+        # We only apply LLM rate limits if NOT in FSM (LLM mode)
+        if current_state is None and isinstance(event, Message) and (event.text or event.photo) and not (event.text and event.text.startswith('/')):
+            if self.daily_stats[user_id]["chats"] >= self.max_chats_per_day:
+                await event.answer("⚠️ Anda telah mencapai batas obrolan AI harian (100 chat). Mengalihkan ke mode manual...")
+                await _force_fallback(event, state)
+                return
+
+            if self.daily_stats[user_id]["chars"] + text_length > self.max_chars_per_day:
+                await event.answer("⚠️ Anda telah mencapai batas karakter AI harian. Mengalihkan ke mode manual...")
+                await _force_fallback(event, state)
+                return
+
+            self.daily_stats[user_id]["chats"] += 1
+            self.daily_stats[user_id]["chars"] += text_length
+
+        return await handler(event, data)
+
+router.message.middleware(AntiSpamMiddleware())
+
+# ── Fallback Helpers ──
+async def _force_fallback(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    if user_id in chat_history:
+        del chat_history[user_id]
+        
+    await state.clear()
+    
+    telegram_id = str(user_id)
+    try:
+        repo = get_repo()
+        existing = await asyncio.to_thread(repo.find_reporter_by_telegram_id, telegram_id)
+    except:
+        existing = None
+
+    if existing and existing.get("phone"):
+        await state.update_data(
+            reporter_id=existing["id"],
+            reporter_name=existing.get("name", ""),
+            reporter_phone=existing.get("phone", ""),
+            telegram_id=telegram_id
+        )
+        await _show_kelurahan_picker(message, state)
+    else:
+        await state.update_data(
+            telegram_id=telegram_id,
+            reporter_name=_get_telegram_name(message.from_user),
+        )
+        contact_kb = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="📱 Bagikan Nomor Telepon", request_contact=True)]],
+            resize_keyboard=True, one_time_keyboard=True
+        )
+        await message.answer("Silakan tekan tombol di bawah untuk membagikan nomor telepon agar dapat melanjutkan:", reply_markup=contact_kb)
+        await state.set_state(ReportStates.INPUT_TELEPON)
+
+
+# ── FSM Core ──
+MAX_PHOTOS = 3
+_media_group_buffer: Dict[str, List[str]] = {}
+_media_group_tasks: Dict[str, asyncio.Task] = {}
+_media_group_context: Dict[str, tuple] = {}
+
+CATEGORY_OPTIONS = [
+    {"id": "tidak_terangkut", "name": "🚛 Tidak Terangkut"},
+    {"id": "tps_penuh",       "name": "🗑️ TPS Penuh"},
+    {"id": "sampah_liar",     "name": "🏚️ Sampah Liar"},
+    {"id": "bau",             "name": "😷 Bau"},
+    {"id": "lainnya",         "name": "📋 Lainnya"},
+]
+
+def get_category_name(category_id: str) -> str:
+    return next((c["name"] for c in CATEGORY_OPTIONS if c["id"] == category_id), category_id)
 
 def get_repo() -> "SupabaseRepo":
     global _repo
@@ -87,6 +207,17 @@ async def _notify_koordinator_for_report(report: dict) -> None:
     except Exception:
         logger.exception("Gagal mengirim notifikasi ke koordinator")
 
+class ReportStates(StatesGroup):
+    INPUT_TELEPON = State()
+    PILIH_KELURAHAN = State()
+    PILIH_KATEGORI = State()
+    UPLOAD_FOTO = State()
+    INPUT_DESKRIPSI = State()
+    SHARE_LOCATION = State()
+    KONFIRMASI = State()
+
+
+# ── LLM Core ──
 SYSTEM_PROMPT = """Kamu adalah Asisten ResikIn, bot pelaporan sampah di Yogyakarta.
 Tugas utamamu adalah mengumpulkan laporan masalah sampah dari warga melalui percakapan alami yang santai.
 Kumpulkan 4 informasi ini:
@@ -115,7 +246,29 @@ JIKA SEMUA DATA SUDAH LENGKAP (Nama, Kelurahan, Deskripsi, Foto tervalidasi AI),
 Hanya keluarkan JSON jika datanya 100% lengkap! Jika belum lengkap, cukup balas dengan teks percakapan biasa tanpa JSON.
 """
 
-async def process_llm_response(user_id: int, message: Message, reply_text: str):
+class DeepSeekTimeoutError(Exception):
+    pass
+
+async def call_deepseek(user_id: int) -> str:
+    for attempt in range(3):
+        try:
+            response = await deepseek_client.chat.completions.create(
+                model="deepseek-v4-flash",
+                messages=chat_history[user_id],
+                max_tokens=800,
+                temperature=0.5,
+                timeout=5.0
+            )
+            reply = response.choices[0].message.content
+            chat_history[user_id].append({"role": "assistant", "content": reply})
+            return reply
+        except Exception as e:
+            logger.warning(f"DeepSeek API Error (attempt {attempt+1}): {e}")
+            await asyncio.sleep(0.5)
+            
+    raise DeepSeekTimeoutError("DeepSeek gagal merespons setelah 3 kali percobaan.")
+
+async def process_llm_response(user_id: int, message: Message, reply_text: str, state: FSMContext):
     import re
     # Check for JSON block
     match = re.search(r'```json\n(.*?)\n```', reply_text, re.DOTALL)
@@ -124,20 +277,17 @@ async def process_llm_response(user_id: int, message: Message, reply_text: str):
         try:
             data = json.loads(json_str)
             if data.get("status") == "complete":
-                # Extract conversational text (everything before the json block)
                 text_part = reply_text[:match.start()].strip()
                 if text_part:
                     await message.answer(text_part)
                 else:
                     await message.answer("Laporan Anda sudah lengkap, sedang kami proses...")
                 
-                # Save to database
                 await save_report(user_id, data["data"], message)
                 return
         except Exception as e:
             logger.error(f"Failed to parse JSON from LLM: {e}")
     
-    # If no valid JSON or not complete, just send the reply
     await message.answer(reply_text)
 
 async def save_report(user_id: int, data: dict, message: Message):
@@ -145,7 +295,6 @@ async def save_report(user_id: int, data: dict, message: Message):
         repo = get_repo()
         telegram_id = str(user_id)
         
-        # Ensure reporter exists
         reporter_name = data.get("reporter_name", "Anonim")
         existing_reporter = await asyncio.to_thread(repo.find_reporter_by_telegram_id, telegram_id)
         if existing_reporter:
@@ -158,7 +307,6 @@ async def save_report(user_id: int, data: dict, message: Message):
             })
             reporter_id = created["id"] if created else None
 
-        # Create report
         report_model = Report(
             user_id=telegram_id,
             reporter_id=reporter_id,
@@ -196,27 +344,21 @@ async def save_report(user_id: int, data: dict, message: Message):
             await _notify_koordinator_for_report(inserted_row)
             
         # Reset state after completion
-        chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-        user_state[user_id] = {"file_ids": [], "suggested_category": None}
+        if user_id in chat_history:
+            del chat_history[user_id]
+        if user_id in user_state:
+            del user_state[user_id]
         
     except Exception as e:
         logger.exception("Failed to save report from LLM JSON")
         await message.answer("Terjadi kesalahan sistem saat menyimpan laporan. Mohon maaf.")
 
-async def call_deepseek(user_id: int) -> str:
-    try:
-        response = await deepseek_client.chat.completions.create(
-            model="deepseek-v4-flash",
-            messages=chat_history[user_id],
-            max_tokens=800,
-            temperature=0.5
-        )
-        reply = response.choices[0].message.content
-        chat_history[user_id].append({"role": "assistant", "content": reply})
-        return reply
-    except Exception as e:
-        logger.error(f"DeepSeek API Error: {e}")
-        return "Maaf, sistem AI sedang beristirahat. Silakan coba sebentar lagi ya."
+# ── Handlers ──
+
+@router.message(Command("link"))
+async def cmd_link(message: Message):
+    token = message.text.split(maxsplit=1)[1] if message.text and " " in message.text else ""
+    await _handle_link_token(message, token)
 
 async def _handle_link_token(message: Message, token: str) -> None:
     if not token:
@@ -257,33 +399,33 @@ async def _handle_link_token(message: Message, token: str) -> None:
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, state: FSMContext):
     args = message.text.split(maxsplit=1)[1] if message.text and " " in message.text else ""
     if args.startswith("link_"):
         token = args.replace("link_", "", 1).strip()
         await _handle_link_token(message, token)
         return
 
+    await state.clear()
     user_id = message.from_user.id
     chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
     user_state[user_id] = {"file_ids": [], "suggested_category": None}
     
-    # Seed the chat with user's opening intent
     chat_history[user_id].append({"role": "user", "content": f"Halo, saya {_get_telegram_name(message.from_user)}. Saya ingin melapor masalah sampah."})
     
     bot = get_bot()
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     
-    reply = await call_deepseek(user_id)
-    await process_llm_response(user_id, message, reply)
+    try:
+        reply = await call_deepseek(user_id)
+        await process_llm_response(user_id, message, reply, state)
+    except DeepSeekTimeoutError:
+        await message.answer("⚠️ Sistem AI kami sedang mengalami gangguan jaringan. Mari kita gunakan mode pelaporan manual.")
+        await _force_fallback(message, state)
 
-@router.message(Command("link"))
-async def cmd_link(message: Message):
-    token = message.text.split(maxsplit=1)[1] if message.text and " " in message.text else ""
-    await _handle_link_token(message, token)
 
-@router.message(F.text)
-async def handle_text(message: Message):
+@router.message(StateFilter(None), F.text)
+async def handle_text_llm(message: Message, state: FSMContext):
     user_id = message.from_user.id
     if user_id not in chat_history:
         chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -294,11 +436,16 @@ async def handle_text(message: Message):
     bot = get_bot()
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     
-    reply = await call_deepseek(user_id)
-    await process_llm_response(user_id, message, reply)
+    try:
+        reply = await call_deepseek(user_id)
+        await process_llm_response(user_id, message, reply, state)
+    except DeepSeekTimeoutError:
+        await message.answer("⚠️ Sistem AI cerdas kami gagal memproses setelah 3 kali percobaan. Jangan khawatir, mari alihkan ke form manual.")
+        await _force_fallback(message, state)
 
-@router.message(F.photo)
-async def handle_photo(message: Message):
+
+@router.message(StateFilter(None), F.photo)
+async def handle_photo_llm(message: Message, state: FSMContext):
     user_id = message.from_user.id
     if user_id not in chat_history:
         chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -310,7 +457,6 @@ async def handle_photo(message: Message):
     bot = get_bot()
     await bot.send_chat_action(chat_id=message.chat.id, action="upload_photo")
     
-    # Download and validate image
     try:
         file_info = await bot.get_file(file_id)
         downloaded_file = await bot.download_file(file_info.file_path)
@@ -342,5 +488,242 @@ async def handle_photo(message: Message):
     chat_history[user_id].append({"role": "system", "content": system_note})
     
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    reply = await call_deepseek(user_id)
-    await process_llm_response(user_id, message, reply)
+    
+    try:
+        reply = await call_deepseek(user_id)
+        await process_llm_response(user_id, message, reply, state)
+    except DeepSeekTimeoutError:
+        await message.answer("⚠️ Sistem AI gambar kami sedang gangguan. Mari kita gunakan pelaporan manual.")
+        await _force_fallback(message, state)
+
+
+# ── FSM Manual Handlers ──
+
+async def _show_kelurahan_picker(message: Message, state: FSMContext):
+    builder = InlineKeyboardBuilder()
+    for item in KELURAHAN_OPTIONS:
+        builder.button(text=item["name"], callback_data=f"kel:{item['id']}")
+    builder.adjust(2)
+    kb = builder.as_markup()
+    await message.answer("🏘️ [Mode Manual] Silakan pilih kelurahan:", reply_markup=kb)
+    await state.set_state(ReportStates.PILIH_KELURAHAN)
+
+@router.message(StateFilter(ReportStates.INPUT_TELEPON), F.contact)
+async def handle_contact(message: Message, state: FSMContext):
+    phone = message.contact.phone_number
+    data = await state.get_data()
+    telegram_id = data.get("telegram_id", str(message.from_user.id))
+    reporter_name = data.get("reporter_name", _get_telegram_name(message.from_user))
+
+    reporter_model = Reporter(
+        telegram_id=telegram_id,
+        name=reporter_name,
+        phone=phone,
+    )
+    try:
+        repo = get_repo()
+        existing = await asyncio.to_thread(repo.find_reporter_by_telegram_id, telegram_id)
+        if existing:
+            reporter_id = existing["id"]
+        else:
+            created = await asyncio.to_thread(repo.create_reporter, reporter_model.dict_for_db())
+            reporter_id = created["id"] if created else None
+    except Exception:
+        logger.exception("Gagal menyimpan reporter")
+        reporter_id = None
+
+    await state.update_data(
+        reporter_id=reporter_id,
+        reporter_phone=phone,
+    )
+
+    await message.answer(
+        f"✅ Terima kasih! Nomor {phone} tersimpan.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    await _show_kelurahan_picker(message, state)
+
+@router.message(StateFilter(ReportStates.INPUT_TELEPON))
+async def handle_phone_text_fallback(message: Message, state: FSMContext):
+    await message.answer(
+        "⚠️ Silakan tekan tombol \"📱 Bagikan Nomor Telepon\" di bawah, "
+        "bukan mengetik nomor secara manual."
+    )
+
+@router.callback_query(StateFilter(ReportStates.PILIH_KELURAHAN), F.data.startswith("kel:"))
+async def handle_kelurahan(call: CallbackQuery, state: FSMContext):
+    kelurahan_id = call.data.split(":", 1)[1] if call.data else ""
+    await state.update_data(kelurahan_id=kelurahan_id)
+    kel_name = get_kelurahan_name(kelurahan_id)
+
+    builder = InlineKeyboardBuilder()
+    for cat in CATEGORY_OPTIONS:
+        builder.button(text=cat["name"], callback_data=f"cat:{cat['id']}")
+    builder.adjust(2)
+    kb = builder.as_markup()
+    await call.message.answer(
+        f"Kelurahan dipilih: {kel_name}.\n\n"
+        "📂 Pilih kategori laporan:",
+        reply_markup=kb,
+    )
+    await state.set_state(ReportStates.PILIH_KATEGORI)
+    await call.answer()
+
+@router.callback_query(StateFilter(ReportStates.PILIH_KATEGORI), F.data.startswith("cat:"))
+async def handle_category(call: CallbackQuery, state: FSMContext):
+    category_id = call.data.split(":", 1)[1] if call.data else ""
+    await state.update_data(category=category_id)
+    cat_name = get_category_name(category_id)
+    await call.message.answer(
+        f"Kategori: {cat_name}\n\n"
+        f"📷 Silakan unggah foto tumpukan sampah (maksimal {MAX_PHOTOS} foto)."
+    )
+    await state.set_state(ReportStates.UPLOAD_FOTO)
+    await call.answer()
+
+@router.message(StateFilter(ReportStates.UPLOAD_FOTO), F.photo)
+async def handle_photo_manual(message: Message, state: FSMContext):
+    file_id = message.photo[-1].file_id
+    mg_id = message.media_group_id
+
+    if mg_id is None:
+        await state.update_data(file_ids=[file_id])
+        await message.answer("✅ 1 foto diterima. Silakan ketik deskripsi laporan.")
+        await state.set_state(ReportStates.INPUT_DESKRIPSI)
+        return
+
+    if mg_id not in _media_group_buffer:
+        _media_group_buffer[mg_id] = []
+
+    _media_group_buffer[mg_id].append(file_id)
+    _media_group_context[mg_id] = (message, state)
+
+    if mg_id in _media_group_tasks:
+        _media_group_tasks[mg_id].cancel()
+
+    async def finalize_group():
+        await asyncio.sleep(1.0)
+        collected = _media_group_buffer.pop(mg_id, [])
+        _media_group_tasks.pop(mg_id, None)
+        ctx_msg, ctx_state = _media_group_context.pop(mg_id, (message, state))
+
+        truncated = False
+        if len(collected) > MAX_PHOTOS:
+            truncated = True
+            collected = collected[:MAX_PHOTOS]
+
+        await ctx_state.update_data(file_ids=collected)
+
+        if truncated:
+            await ctx_msg.answer(
+                f"⚠️ Maksimal {MAX_PHOTOS} foto per laporan. "
+                f"Hanya {MAX_PHOTOS} foto pertama yang disimpan."
+            )
+
+        await ctx_msg.answer(
+            f"✅ {len(collected)} foto diterima. Silakan ketik deskripsi laporan."
+        )
+        await ctx_state.set_state(ReportStates.INPUT_DESKRIPSI)
+
+    task = asyncio.create_task(finalize_group())
+    _media_group_tasks[mg_id] = task
+
+@router.message(StateFilter(ReportStates.INPUT_DESKRIPSI))
+async def handle_description(message: Message, state: FSMContext):
+    await state.update_data(description=message.text)
+    await message.answer("📍 Silakan bagikan lokasi (share location) atau ketik '-' jika tidak tahu koordinatnya.")
+    await state.set_state(ReportStates.SHARE_LOCATION)
+
+@router.message(StateFilter(ReportStates.SHARE_LOCATION))
+async def handle_location(message: Message, state: FSMContext):
+    data = await state.get_data()
+    
+    if message.location:
+        await state.update_data(
+            latitude=message.location.latitude,
+            longitude=message.location.longitude,
+        )
+        lat = message.location.latitude
+        lon = message.location.longitude
+    else:
+        lat = "-"
+        lon = "-"
+
+    kelurahan_id = data.get("kelurahan_id", "-")
+    kel_name = get_kelurahan_name(kelurahan_id)
+    category = data.get("category", "-")
+    cat_name = get_category_name(category)
+    file_ids = data.get("file_ids", [])
+    summary = (
+        "📋 Konfirmasi laporan:\n"
+        f"- 👤 Nama: {data.get('reporter_name', '-')}\n"
+        f"- 📱 Telepon: {data.get('reporter_phone', '-')}\n"
+        f"- 🏘️ Kelurahan: {kel_name}\n"
+        f"- 📂 Kategori: {cat_name}\n"
+        f"- 📷 Jumlah foto: {len(file_ids)}\n"
+        f"- 📝 Deskripsi: {data.get('description', '-')}\n"
+        f"- 📍 Lokasi: {lat}, {lon}"
+    )
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✅ Konfirmasi", callback_data="confirm:yes")
+    builder.button(text="❌ Batal", callback_data="confirm:no")
+    kb = builder.as_markup()
+    await message.answer(summary, reply_markup=kb)
+    await state.set_state(ReportStates.KONFIRMASI)
+
+@router.callback_query(StateFilter(ReportStates.KONFIRMASI), F.data.startswith("confirm:"))
+async def handle_confirm_manual(call: CallbackQuery, state: FSMContext):
+    decision = call.data.split(":", 1)[1] if call.data else ""
+    if decision != "yes":
+        await call.message.answer("Laporan dibatalkan. Ketik /start untuk memulai lagi.")
+        await state.clear()
+        await call.answer()
+        return
+
+    data = await state.get_data()
+    report_model = Report(
+        user_id=str(call.from_user.id),
+        reporter_id=data.get("reporter_id"),
+        reporter_name=data.get("reporter_name"),
+        reporter_phone=data.get("reporter_phone"),
+        kelurahan_id=data.get("kelurahan_id", "unknown"),
+        category=data.get("category"),
+        file_ids=data.get("file_ids", []),
+        description=data.get("description", ""),
+        latitude=data.get("latitude"),
+        longitude=data.get("longitude"),
+        status="dikirim",
+        source="telegram",
+        metadata={}
+    )
+
+    try:
+        repo = get_repo()
+        inserted = await asyncio.to_thread(repo.insert_report, report_model.dict_for_db())
+        inserted_id = None
+        tracking_code = None
+        inserted_row = None
+        if inserted and isinstance(inserted, list) and len(inserted) > 0:
+            inserted_id = inserted[0].get("id")
+            tracking_code = inserted[0].get("tracking_code")
+            inserted_row = inserted[0]
+        elif isinstance(inserted, dict):
+            inserted_id = inserted.get("id")
+            tracking_code = inserted.get("tracking_code")
+            inserted_row = inserted
+
+        msg = "✅ Laporan diterima, terima kasih!"
+        if tracking_code:
+            msg += f"\n📋 Kode tracking: {tracking_code}"
+        elif inserted_id:
+            msg += f"\n🆔 ID laporan: {inserted_id}"
+        await call.message.answer(msg)
+
+        if inserted_row:
+            await _notify_koordinator_for_report(inserted_row)
+    except Exception:
+        logger.exception("Gagal menyimpan laporan")
+        await call.message.answer("Terjadi kesalahan saat menyimpan laporan. Silakan coba lagi nanti.")
+    finally:
+        await state.clear()
+        await call.answer()
