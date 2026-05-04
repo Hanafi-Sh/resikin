@@ -410,28 +410,7 @@ async def _handle_link_token(message: Message, token: str) -> None:
         await message.answer("Gagal menghubungkan akun. Silakan coba lagi.")
 
 
-@router.message(Command("reset_me"))
-async def cmd_reset_me(message: Message, state: FSMContext):
-    user_id = message.from_user.id
-    telegram_id = str(user_id)
-    
-    # 1. Clear Memory
-    if user_id in chat_history:
-        del chat_history[user_id]
-    if user_id in user_state:
-        del user_state[user_id]
-    await state.clear()
-    
-    # 2. Delete from Supabase
-    try:
-        repo = get_repo()
-        # Delete reporter record
-        repo.client.table("reporters").delete().eq("telegram_id", telegram_id).execute()
-        await message.answer("🔄 **Reset Berhasil!**\nSeluruh ingatan AI dan data profil Anda di *database* telah dihapus.\nAnda kini dianggap sebagai pengguna baru 100%. Ketik /start untuk memulai kembali.", parse_mode="Markdown")
-    except Exception as e:
-        await message.answer(f"Gagal melakukan reset: {e}")
-
-@router.message(Command("start"))
+@router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     args = message.text.split(maxsplit=1)[1] if message.text and " " in message.text else ""
     if args.startswith("link_"):
