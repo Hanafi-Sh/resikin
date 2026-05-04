@@ -1,10 +1,13 @@
 import pytest
 import importlib
 import os
+from types import SimpleNamespace
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Update
 from aiogram.fsm.storage.base import StorageKey
+
+from tests.conftest import FakeCallback, FakeMessage, FakeState
 
 
 class DummyBot(Bot):
@@ -84,30 +87,33 @@ async def test_fsm_flow_happy_path_cancel(monkeypatch):
     monkeypatch.setattr(bot_module.asyncio, "to_thread", immediate_to_thread)
     
     ReportStates = bot_module.ReportStates
-    dp = bot_module.dp
-    storage = bot_module.storage
-    bot = DummyBot(token="123:TEST")
+    state = FakeState(
+        data={
+            "reporter_id": "123",
+            "reporter_name": "Test",
+            "reporter_phone": "08123456789",
+            "telegram_id": "1",
+        },
+        state=ReportStates.PILIH_KELURAHAN.state,
+    )
+    assert await state.get_state() == ReportStates.PILIH_KELURAHAN.state
 
-    key = StorageKey(bot_id=bot.id, chat_id=1, user_id=1)
+    await bot_module.handle_kelurahan(FakeCallback(data="kel:kotabaru"), state)
+    assert await state.get_state() == ReportStates.PILIH_KATEGORI.state
 
-    await _feed_message(dp, bot, text="/start")
-    assert await storage.get_state(key) == ReportStates.PILIH_KELURAHAN.state
+    await bot_module.handle_category(FakeCallback(data="cat:tps_penuh"), state)
+    assert await state.get_state() == ReportStates.UPLOAD_FOTO.state
 
-    await _feed_callback(dp, bot, data="kel:kotabaru")
-    assert await storage.get_state(key) == ReportStates.PILIH_KATEGORI.state
+    photo = [SimpleNamespace(file_id="file-1", file_unique_id="fu-1", width=1, height=1, file_size=1)]
+    await bot_module.handle_photo_manual(FakeMessage(photo=photo), state)
+    assert await state.get_state() == ReportStates.INPUT_DESKRIPSI.state
 
-    await _feed_callback(dp, bot, data="cat:tps_penuh")
-    assert await storage.get_state(key) == ReportStates.UPLOAD_FOTO.state
+    await bot_module.handle_description(FakeMessage(text="Ada sampah menumpuk"), state)
+    assert await state.get_state() == ReportStates.SHARE_LOCATION.state
 
-    photo = [{"file_id": "file-1", "file_unique_id": "fu-1", "width": 1, "height": 1, "file_size": 1}]
-    await _feed_message(dp, bot, photo=photo)
-    assert await storage.get_state(key) == ReportStates.INPUT_DESKRIPSI.state
+    location = SimpleNamespace(latitude=-7.8, longitude=110.4)
+    await bot_module.handle_location(FakeMessage(location=location), state)
+    assert await state.get_state() == ReportStates.KONFIRMASI.state
 
-    await _feed_message(dp, bot, text="Ada sampah menumpuk")
-    assert await storage.get_state(key) == ReportStates.SHARE_LOCATION.state
-
-    await _feed_message(dp, bot, location={"latitude": -7.8, "longitude": 110.4})
-    assert await storage.get_state(key) == ReportStates.KONFIRMASI.state
-
-    await _feed_callback(dp, bot, data="confirm:no")
-    assert await storage.get_state(key) is None
+    await bot_module.handle_confirm_manual(FakeCallback(data="confirm:no"), state)
+    assert await state.get_state() is None
