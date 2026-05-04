@@ -18,6 +18,7 @@ const STAT_CARDS = [
   { key: 'dikirim', label: 'Laporan Baru', icon: Inbox, color: 'text-sky-600', bg: 'bg-sky-50', ring: 'ring-sky-200' },
   { key: 'dalam_proses', label: 'Sedang Proses', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', ring: 'ring-amber-200' },
   { key: 'selesai', label: 'Selesai', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', ring: 'ring-emerald-200' },
+  { key: 'ditolak', label: 'Ditolak', icon: AlertCircle, color: 'text-rose-600', bg: 'bg-rose-50', ring: 'ring-rose-200' },
   { key: 'total', label: 'Total Laporan', icon: FileText, color: 'text-slate-600', bg: 'bg-slate-50', ring: 'ring-slate-200' },
 ];
 
@@ -36,7 +37,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
-  const [stats, setStats] = useState({ dikirim: 0, dalam_proses: 0, selesai: 0, total: 0 });
+  const [stats, setStats] = useState({ dikirim: 0, dalam_proses: 0, selesai: 0, ditolak: 0, total: 0 });
 
   const fetchReports = async () => {
     setLoading(true);
@@ -54,10 +55,11 @@ export default function DashboardPage() {
 
       // Calculate stats from unfiltered data
       if (!statusFilter) {
-        const s = { dikirim: 0, dalam_proses: 0, selesai: 0, total: data.total || 0 };
+        const s = { dikirim: 0, dalam_proses: 0, selesai: 0, ditolak: 0, total: data.total || 0 };
         (data.reports || []).forEach((r) => {
           if (r.status === 'dikirim' || r.status === 'diterima') s.dikirim++;
           if (r.status === 'ditugaskan' || r.status === 'dalam_proses') s.dalam_proses++;
+          if (r.status === 'ditolak') s.ditolak++;
           if (r.status === 'selesai') s.selesai++;
         });
         setStats(s);
