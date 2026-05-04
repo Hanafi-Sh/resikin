@@ -27,8 +27,8 @@ class Report(BaseModel):
     category: Optional[str] = None
     file_ids: List[str] = []
     description: str
-    latitude: float
-    longitude: float
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     status: str = "dikirim"
     metadata: Dict = {}
     source: str = "telegram"
