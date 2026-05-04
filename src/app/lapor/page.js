@@ -503,26 +503,26 @@ export default function LaporPage() {
               <p className="text-sm text-slate-500 mb-4">Pastikan semua informasi sudah benar sebelum dikirim</p>
 
               <div className="space-y-4">
-                <div className="bg-slate-50 rounded-xl p-4">
+                <div className="bg-slate-100 rounded-xl p-4">
                   <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Kategori</p>
                   <p className="text-sm font-semibold text-slate-900">
                     {REPORT_CATEGORIES.find(c => c.value === formData.category)?.label}
                   </p>
                 </div>
 
-                <div className="bg-slate-50 rounded-xl p-4">
+                <div className="bg-slate-100 rounded-xl p-4">
                   <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Pelapor</p>
                   <p className="text-sm font-semibold text-slate-900">{formData.reporter_name}</p>
                   <p className="text-sm text-slate-600">{formData.reporter_phone}</p>
                 </div>
 
-                <div className="bg-slate-50 rounded-xl p-4">
+                <div className="bg-slate-100 rounded-xl p-4">
                   <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Deskripsi</p>
                   <p className="text-sm text-slate-700">{formData.description}</p>
                 </div>
 
                 {formData.photos.length > 0 && (
-                  <div className="bg-slate-50 rounded-xl p-4">
+                  <div className="bg-slate-100 rounded-xl p-4">
                     <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Foto ({formData.photos.length})</p>
                     <div className="flex gap-2">
                       {formData.photos.map((photo, i) => (
@@ -535,7 +535,7 @@ export default function LaporPage() {
                 )}
 
                 {formData.address && (
-                  <div className="bg-slate-50 rounded-xl p-4">
+                  <div className="bg-slate-100 rounded-xl p-4">
                     <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Lokasi</p>
                     <p className="text-sm text-slate-700">{formData.address}</p>
                   </div>
