@@ -120,8 +120,13 @@ export default function TestModelPage() {
                   <div className="space-y-4">
                     {/* Summary Badge */}
                     <div className={`p-3 rounded-lg border ${result.isWaste ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/20 border-rose-500/30 text-rose-300'}`}>
-                      <p className="font-semibold">{result.isWaste ? '✅ Detected as WASTE' : '❌ NOT detected as waste'}</p>
+                      <p className="font-semibold">{result.isWaste ? '✅ Detected as WASTE' : '❌ NOT detected as waste (SPAM)'}</p>
                       <p className="text-sm opacity-80 mt-1">Top label: "{result.top_label}" ({(result.confidence * 100).toFixed(2)}%)</p>
+                      {result.suggested_category && (
+                        <p className="text-sm font-medium mt-1 text-emerald-200">
+                          ✨ Suggested Category: <span className="uppercase tracking-wider">{result.suggested_category}</span>
+                        </p>
+                      )}
                     </div>
 
                     <p className="text-xs text-slate-400">Execution Time: {result.executionTimeMs} ms</p>
