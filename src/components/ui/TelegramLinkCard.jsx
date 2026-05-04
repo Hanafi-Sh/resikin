@@ -44,14 +44,14 @@ export default function TelegramLinkCard() {
   return (
     <Card className="p-6 bg-gradient-to-br from-white to-sky-50/50 border-sky-100 relative overflow-hidden">
       {/* Decorative background element */}
-      <div className="absolute -right-6 -top-6 text-sky-100 opacity-50 transform rotate-12 pointer-events-none">
+      <div className="absolute -right-6 -top-6 text-emerald-100 opacity-50 transform rotate-12 pointer-events-none">
         <Send className="w-32 h-32" />
       </div>
 
       <div className="relative z-10">
         <div className="flex items-start gap-4 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center shrink-0">
-            <Send className="w-5 h-5 text-sky-600" />
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+            <Send className="w-5 h-5 text-emerald-600" />
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-900">Hubungkan Notifikasi Telegram</h2>
@@ -72,7 +72,7 @@ export default function TelegramLinkCard() {
           <Button 
             onClick={generateToken} 
             loading={loading}
-            className="w-full sm:w-auto bg-sky-600 hover:bg-sky-700 text-white"
+            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             <Key className="w-4 h-4 mr-2" />
             Generate Kode OTP
