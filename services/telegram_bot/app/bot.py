@@ -221,7 +221,7 @@ class ReportStates(StatesGroup):
 SYSTEM_PROMPT = """Kamu adalah Asisten ResikIn, bot lapor sampah di Yogyakarta.
 Kumpulkan info berikut:
 1. Nama Pelapor
-2. Kelurahan (Sistem otomatis mendeteksi dari GPS. JIKA warga sudah kirim lokasi GPS, JANGAN TANYAKAN kelurahan lagi!).
+2. Kelurahan (Sistem otomatis mendeteksi dari GPS. JIKA warga sudah kirim lokasi GPS, MAKA SYARAT KELURAHAN OTOMATIS LENGKAP. JANGAN PERNAH TANYAKAN KELURAHAN JIKA GPS SUDAH ADA!).
 3. Deskripsi Masalah (Intinya saja: bau, numpuk, lokasi spesifik, dll).
 4. Foto Bukti (OPSIONAL. Jangan dipaksa jika warga tidak ada foto).
 5. Lokasi GPS (WAJIB. Suruh tekan tombol 'Bagikan Lokasi' jika belum ada).
@@ -242,7 +242,7 @@ JIKA SEMUA DATA WAJIB SUDAH LENGKAP (Nama, Kelurahan, Deskripsi) dan [System] te
   "status": "complete",
   "data": {
     "reporter_name": "nama lengkap warga",
-    "kelurahan_id": "nama kelurahan dalam huruf kecil (contoh: wirobrajan, ngupasan)",
+    "kelurahan_id": "nama kelurahan (jika tahu), atau isi dengan 'dari_gps' jika tidak tahu dan mengandalkan sistem",
     "description": "deskripsi detail",
     "suggested_category": "kategori dari AI (tps_penuh, sampah_liar, tidak_terangkut, bau, lainnya)"
   }
@@ -509,7 +509,7 @@ async def handle_location_llm(message: Message, state: FSMContext):
     if kelurahan_detected:
         system_note = f"[System] Warga telah membagikan lokasi GPS (Lat: {lat}, Lon: {lon}). Berdasarkan GPS, lokasi ini berada di Kelurahan {kelurahan_detected}. Anggap syarat 'Kelurahan' sudah lengkap dan JANGAN tanyakan lagi soal kelurahan. Lanjutkan proses atau keluarkan JSON."
     else:
-        system_note = f"[System] Warga telah membagikan lokasi GPS (Lat: {lat}, Lon: {lon}). Anggap saja syarat lokasi sudah lengkap. Keluarkan JSON jika data lain sudah lengkap."
+        system_note = f"[System] Warga telah membagikan lokasi GPS (Lat: {lat}, Lon: {lon}). Anggap syarat 'Lokasi GPS' dan 'Kelurahan' sudah LENGKAP dan TERPENUHI. JANGAN tanyakan lagi soal kelurahan atau lokasi! Lanjutkan proses atau keluarkan JSON jika data lain sudah lengkap."
         
     chat_history[user_id].append({"role": "system", "content": system_note})
     
