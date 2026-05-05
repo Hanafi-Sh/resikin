@@ -34,9 +34,11 @@ AI agent atau developer yang mengubah bot wajib mematuhi prinsip berikut:
 
 Flow utama saat ini bukan FSM linear penuh, tetapi hybrid:
 
-1. **/start**
-   - Jika user belum punya nomor telepon, bot meminta contact button atau input nomor manual.
-   - Jika user lama sudah punya nomor telepon, bot mulai mode percakapan AI.
+1. **Entry Point**
+   - `/start` menampilkan menu awal, bukan langsung memulai laporan.
+   - Tombol reply keyboard **📝 Saya mau lapor** memulai laporan saat user idle.
+   - Tombol ini disembunyikan selama flow laporan berjalan dan muncul lagi setelah laporan selesai/batal.
+   - Jika tombol ditekan saat laporan masih aktif, bot tidak boleh mereset progres laporan.
 
 2. **Percakapan AI**
    - User bisa menjelaskan masalah secara natural.
