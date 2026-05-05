@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Search, CheckCircle2, Clock, AlertCircle, Truck, ClipboardCheck, XCircle, ArrowRight, ArrowLeft, Leaf } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import ReportPhotoGallery from '@/components/ui/ReportPhotoGallery';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { cn, formatDateTime } from '@/lib/utils';
 import { REPORT_STATUS, REPORT_STATUS_LABELS, REPORT_CATEGORY_LABELS } from '@/lib/constants';
@@ -158,16 +159,12 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
               )}
 
               {/* Report Photos */}
-              {report.report_photos?.length > 0 && (
+              {report.report_photos?.filter(p => p.type === 'report').length > 0 && (
                 <div className="mt-4 pt-4 border-t border-slate-100">
-                  <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider">Foto Laporan</p>
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {report.report_photos.filter(p => p.type === 'report').map((photo) => (
-                      <div key={photo.id} className="w-20 h-20 rounded-lg overflow-hidden shrink-0 border border-slate-200">
-                        <img src={photo.photo_url} alt="" className="w-full h-full object-cover" />
-                      </div>
-                    ))}
-                  </div>
+                  <ReportPhotoGallery
+                    photos={report.report_photos.filter(p => p.type === 'report')}
+                    size="md"
+                  />
                 </div>
               )}
             </Card>
@@ -251,16 +248,11 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
             {/* Completion photos */}
             {report.report_photos?.filter(p => p.type === 'completion').length > 0 && (
               <Card className="p-6">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">
-                  Foto Bukti Penyelesaian
-                </h3>
-                <div className="flex gap-3 overflow-x-auto pb-1">
-                  {report.report_photos.filter(p => p.type === 'completion').map((photo) => (
-                    <div key={photo.id} className="w-32 h-32 rounded-xl overflow-hidden shrink-0 border border-slate-200">
-                      <img src={photo.photo_url} alt="" className="w-full h-full object-cover" />
-                    </div>
-                  ))}
-                </div>
+                <ReportPhotoGallery
+                  photos={report.report_photos.filter(p => p.type === 'completion')}
+                  title="Foto Bukti Penyelesaian"
+                  size="md"
+                />
               </Card>
             )}
           </div>

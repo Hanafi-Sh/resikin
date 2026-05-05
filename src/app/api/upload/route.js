@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -7,14 +8,26 @@ export const dynamic = 'force-dynamic';
  * POST /api/upload — Upload foto ke Supabase Storage
  */
 export async function POST(request) {
-  const supabase = await createClient();
+  const requestSupabase = await createClient();
+  const adminSupabase = createAdminClient();
+  const supabase = adminSupabase || requestSupabase;
 
   try {
     const formData = await request.formData();
     const file = formData.get('file');
+    const reportId = formData.get('report_id');
+    const type = formData.get('type') || 'report';
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
+
+    if (!['report', 'completion'].includes(type)) {
+      return NextResponse.json({ error: 'Tipe foto tidak valid' }, { status: 400 });
+    }
+
+    if (type === 'completion' && !reportId) {
+      return NextResponse.json({ error: 'report_id wajib diisi untuk foto penyelesaian' }, { status: 400 });
     }
 
     // Validate file type
@@ -58,10 +71,31 @@ export async function POST(request) {
       .from('report-photos')
       .getPublicUrl(data.path);
 
+    let photo = null;
+    if (reportId) {
+      const { data: photoData, error: photoError } = await supabase
+        .from('report_photos')
+        .insert({
+          report_id: reportId,
+          photo_url: urlData.publicUrl,
+          type,
+        })
+        .select('id, photo_url, type, uploaded_at')
+        .single();
+
+      if (photoError) {
+        await supabase.storage.from('report-photos').remove([data.path]);
+        return NextResponse.json({ error: photoError.message }, { status: 500 });
+      }
+
+      photo = photoData;
+    }
+
     return NextResponse.json({
       success: true,
       url: urlData.publicUrl,
       path: data.path,
+      photo,
     });
 
   } catch (err) {

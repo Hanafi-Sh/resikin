@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { withTelegramReportPhotos } from '@/lib/telegram-photos';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,7 @@ export async function GET(request, { params }) {
       address,
       status,
       reject_reason,
+      file_ids,
       created_at,
       updated_at,
       report_photos(id, photo_url, type, uploaded_at),
@@ -41,5 +43,5 @@ export async function GET(request, { params }) {
     report.status_history.sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at));
   }
 
-  return NextResponse.json({ report });
+  return NextResponse.json({ report: withTelegramReportPhotos(report) });
 }

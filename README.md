@@ -82,6 +82,8 @@ npm install
 # 3. Setup environment variables
 cp .env.local.example .env.local
 # Edit .env.local dan isi SUPABASE_URL + SUPABASE_ANON_KEY
+# Untuk endpoint server web yang perlu bypass RLS:
+#   - SUPABASE_SERVICE_ROLE_KEY (server-only, jangan pakai NEXT_PUBLIC_)
 # Optional (notifikasi bot):
 #   - BOT_NOTIFY_URL (contoh: https://bot.example.com)
 #   - BOT_NOTIFY_SECRET (shared secret)
@@ -207,6 +209,78 @@ python run_bot.py
 ```
 
 Jika memakai `npm run dev` lewat ngrok, tambahkan domain ngrok ke `allowedDevOrigins` di `next.config.mjs`, atau gunakan wildcard seperti `*.ngrok-free.dev`. Dev mode memakai HMR/WebSocket dan bisa kurang stabil lewat tunnel.
+
+## 📷 Foto Laporan di Website
+
+Website menampilkan foto laporan dari dua sumber berbeda:
+
+| Sumber | Lokasi Data | Cara Ditampilkan |
+|--------|-------------|------------------|
+| Form web / foto penyelesaian petugas | `report_photos.photo_url` | URL Supabase Storage langsung |
+| Telegram bot | `reports.file_ids` | URL proxy `BOT_NOTIFY_URL/telegram/file/{file_id}` |
+
+Foto yang dikirim warga lewat Telegram **tidak di-upload ulang ke Supabase Storage**. Bot menyimpan `file_id` Telegram di `reports.file_ids`, lalu web API menormalisasi data tersebut menjadi item `report_photos` sementara agar komponen UI bisa menampilkan semua foto lewat bentuk data yang sama.
+
+Endpoint web yang menggabungkan foto Storage dan foto Telegram:
+
+- `GET /api/reports`
+- `GET /api/reports/[id]`
+- `GET /api/assignments`
+- `GET /api/tracking/[code]`
+- `GET /api/public-reports`
+
+Syarat agar foto Telegram muncul:
+
+1. Laporan di Supabase punya `reports.file_ids`.
+2. `BOT_NOTIFY_URL` di `.env.local` web mengarah ke FastAPI bot service.
+3. FastAPI bot service aktif dan endpoint `GET /telegram/file/{file_id}` bisa diakses dari browser.
+
+Contoh lokal:
+
+```env
+BOT_NOTIFY_URL=http://localhost:8000
+```
+
+Lalu jalankan:
+
+```bash
+# Terminal 1
+cd services/telegram_bot
+source .venv/bin/activate
+python run_bot.py
+
+# Terminal 2
+npm run dev
+```
+
+UI memakai galeri foto reusable dengan thumbnail lebih besar dan modal zoom saat foto diklik. Galeri ini dipakai di detail laporan koordinator, detail tugas petugas, dan tracking warga.
+
+### Foto Bukti Penyelesaian Petugas
+
+Saat petugas menandai tugas sebagai `selesai`, foto bukti penyelesaian di-upload lewat `POST /api/upload` dengan payload form-data:
+
+| Field | Keterangan |
+|-------|------------|
+| `file` | File gambar |
+| `report_id` | ID laporan |
+| `type` | `completion` |
+
+Route `/api/upload` melakukan dua hal:
+
+1. Upload file ke bucket Supabase Storage `report-photos`.
+2. Insert metadata ke tabel `report_photos` dengan `type='completion'`.
+
+Karena insert ke `report_photos` bisa terkena Row Level Security, `.env.local` root web perlu punya:
+
+```env
+SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+Key ini hanya boleh dipakai server-side. Jangan pernah menamainya `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY`, karena prefix `NEXT_PUBLIC_` akan mengekspos nilainya ke browser.
+
+Env web dan env bot terpisah. Key yang ada di `services/telegram_bot/.env` hanya dibaca oleh service Python bot, sedangkan route Next.js membaca `.env.local` di root project.
+
+Jika muncul error `new row violates row-level security policy` saat petugas upload foto penyelesaian, biasanya `SUPABASE_SERVICE_ROLE_KEY` belum ada di `.env.local`, server Next.js belum di-restart setelah env ditambahkan, atau deployment belum memasang env tersebut.
 
 ## 🤖 AI Services
 

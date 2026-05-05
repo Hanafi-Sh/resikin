@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, MapPin, Navigation, Camera, CheckCircle2, Truck,
-  Loader2, ExternalLink, Clock, Image as ImageIcon, X,
+  Loader2, ExternalLink, Clock, X,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import ReportPhotoGallery from '@/components/ui/ReportPhotoGallery';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { cn, formatDateTime } from '@/lib/utils';
 import { REPORT_STATUS_LABELS, REPORT_CATEGORY_LABELS, REPORT_STATUS } from '@/lib/constants';
@@ -25,12 +26,9 @@ export default function TugasDetailPage({ params }) {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [completionPhotos, setCompletionPhotos] = useState([]);
+  const [actionError, setActionError] = useState('');
 
-  useEffect(() => {
-    fetchAssignment();
-  }, [id]);
-
-  const fetchAssignment = async () => {
+  const fetchAssignment = useCallback(async () => {
     try {
       const res = await fetch('/api/assignments');
       if (res.status === 401) { router.push('/login'); return; }
@@ -40,11 +38,17 @@ export default function TugasDetailPage({ params }) {
     } catch {} finally {
       setLoading(false);
     }
-  };
+  }, [id, router]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchAssignment();
+  }, [fetchAssignment]);
 
   const handleStatusUpdate = async (newStatus, notes) => {
     if (!assignment?.report?.id) return;
     setActionLoading(true);
+    setActionError('');
 
     try {
       // Upload completion photos if marking as selesai
@@ -52,20 +56,16 @@ export default function TugasDetailPage({ params }) {
         for (const photo of completionPhotos) {
           const formData = new FormData();
           formData.append('file', photo.file);
+          formData.append('report_id', assignment.report.id);
+          formData.append('type', 'completion');
           const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
           const uploadData = await uploadRes.json();
 
-          if (uploadData.success) {
-            // Save as completion photo
-            const { createClient } = await import('@/lib/supabase/client');
-            const supabase = createClient();
-            await supabase.from('report_photos').insert({
-              report_id: assignment.report.id,
-              photo_url: uploadData.url,
-              type: 'completion',
-            });
+          if (!uploadRes.ok || !uploadData.success) {
+            throw new Error(uploadData.error || 'Foto bukti penyelesaian gagal diunggah');
           }
         }
+        setCompletionPhotos([]);
       }
 
       // Update report status
@@ -75,11 +75,15 @@ export default function TugasDetailPage({ params }) {
         body: JSON.stringify({ status: newStatus, notes }),
       });
 
-      if (res.ok) {
-        await fetchAssignment();
-        setCompletionPhotos([]);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Status tugas gagal diperbarui');
       }
-    } catch {} finally {
+
+      await fetchAssignment();
+    } catch (error) {
+      setActionError(error.message || 'Terjadi kesalahan saat memperbarui tugas. Silakan coba lagi.');
+    } finally {
       setActionLoading(false);
     }
   };
@@ -145,14 +149,16 @@ export default function TugasDetailPage({ params }) {
         {/* Photos */}
         {report.report_photos?.filter(p => p.type === 'report').length > 0 && (
           <Card className="p-6">
-            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Foto Laporan</h2>
-            <div className="flex gap-3 overflow-x-auto pb-1">
-              {report.report_photos.filter(p => p.type === 'report').map((photo) => (
-                <div key={photo.id} className="w-28 h-28 rounded-xl overflow-hidden shrink-0 border border-slate-200">
-                  <img src={photo.photo_url} alt="" className="w-full h-full object-cover" />
-                </div>
-              ))}
-            </div>
+            <ReportPhotoGallery photos={report.report_photos.filter(p => p.type === 'report')} />
+          </Card>
+        )}
+
+        {report.report_photos?.filter(p => p.type === 'completion').length > 0 && (
+          <Card className="p-6">
+            <ReportPhotoGallery
+              photos={report.report_photos.filter(p => p.type === 'completion')}
+              title="Foto Bukti Penyelesaian"
+            />
           </Card>
         )}
 
@@ -181,6 +187,12 @@ export default function TugasDetailPage({ params }) {
         {!isCompleted && (
           <Card className="p-6">
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">Update Status</h2>
+
+            {actionError && (
+              <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {actionError}
+              </div>
+            )}
 
             {/* Upload completion photos */}
             <div className="mb-5">

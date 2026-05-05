@@ -424,6 +424,24 @@ GET http://localhost:8000/telegram/file/AgACAgIAAxkBAAI...
 → Response: binary image (JPEG/PNG) dengan header content-type yang sesuai
 ```
 
+### Integrasi Foto Telegram ke Web
+
+Bot menyimpan foto warga sebagai `reports.file_ids`, bukan sebagai URL Storage. Web app kemudian membuat URL gambar dari:
+
+```txt
+BOT_NOTIFY_URL/telegram/file/{file_id}
+```
+
+Karena itu, agar foto laporan Telegram tampil di dashboard, halaman petugas, dan tracking warga:
+
+1. Service bot/FastAPI harus berjalan.
+2. `BOT_NOTIFY_URL` di `.env.local` web harus mengarah ke host service bot.
+3. `TELEGRAM_BOT_TOKEN` di `.env` bot harus valid karena endpoint proxy mengambil file dari Telegram API.
+
+Redis tetap opsional. Jika `REDIS_URL` kosong, endpoint proxy langsung mengambil file dari Telegram API setiap kali gambar dibuka. Redis hanya dipakai sebagai cache untuk mengurangi request berulang ke Telegram.
+
+Foto bukti penyelesaian dari petugas berbeda dari foto Telegram warga. Foto penyelesaian di-upload oleh web app ke Supabase Storage dan disimpan di tabel `report_photos` dengan `type='completion'`.
+
 ---
 
 ## 📦 Skema Data
@@ -468,6 +486,7 @@ Data yang dikirim bot ke Supabase:
 | **Single Bot** untuk semua 45 kelurahan | Lebih sederhana dari multi-tenant, user pilih kelurahan di awal |
 | **Long Polling** (dev) vs Webhook (prod) | Long polling tidak butuh public URL, cocok untuk development |
 | **Foto disimpan sebagai `file_id`**, bukan di-upload ke Storage | Hemat storage Supabase, foto tetap bisa diakses via proxy endpoint |
+| **Foto penyelesaian petugas disimpan di Storage** | File berasal dari web app, bukan Telegram, sehingga disimpan sebagai URL di `report_photos` |
 | **Service Python terpisah** dari web Next.js | Stack berbeda (Python vs Node.js), bisa di-deploy independen |
 | **Koordinat `float`**, bukan PostGIS | Cukup untuk MVP, menghindari kompleksitas ekstensi PostGIS |
 | **`source` column** di tabel reports | Membedakan laporan dari web (`'web'`) dan Telegram (`'telegram'`) |
@@ -539,6 +558,7 @@ Mode production tidak memakai HMR/WebSocket Next dev server, sehingga lebih coco
 | Error saat simpan laporan | Migration `002` belum dijalankan | Jalankan `002_telegram_bot_support.sql` di Supabase SQL Editor |
 | `tracking_code` duplicate | Collision di random 5-digit | Sangat jarang terjadi; re-run bot untuk retry |
 | Redis connection error | Redis tidak terinstall/berjalan | Aman diabaikan — Redis opsional, hanya untuk cache image proxy |
+| Foto Telegram tidak tampil di web | `BOT_NOTIFY_URL` kosong/salah atau FastAPI bot tidak berjalan | Jalankan `python run_bot.py` dan set `BOT_NOTIFY_URL` ke host service bot |
 | Warga tidak menerima notifikasi status | FastAPI tidak jalan, secret mismatch, atau Telegram menolak URL tombol | Pastikan `run_bot.py` aktif, cek `NOTIFY_WEBHOOK_SECRET`, dan pastikan `APP_BASE_URL` URL publik |
 | Endpoint notifikasi merespons `{"sent":0,"recipients":1}` | Penerima ditemukan, tetapi `bot.send_message` gagal | Biasanya URL tombol invalid/localhost; gunakan tunnel/domain publik |
 | Link tracking dari Telegram loading terus | Halaman client belum hydrate atau tunnel/dev server bermasalah | Pastikan versi terbaru memakai server-side initial report di `/tracking?code=...`; coba production mode lokal |
