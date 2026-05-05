@@ -125,18 +125,24 @@ Flow utama:
 ```txt
 /start
   |
-  +-- User baru/tanpa nomor telepon
-  |     -> bot meminta nomor via contact button atau input manual
-  |
-  +-- User lama
-        -> bot memulai percakapan AI
-        -> user mengirim teks/foto/lokasi
-        -> DeepSeek mengekstrak kandidat data
-        -> Python validator cek kelengkapan
-        -> jika belum lengkap, bot bertanya field berikutnya
-        -> jika lengkap, laporan disimpan ke Supabase
-        -> bot mengirim kode tracking
+  +-- Bot menampilkan menu awal + tombol "📝 Saya mau lapor"
+        |
+        +-- User menekan tombol saat idle
+              |
+              +-- User baru/tanpa nomor telepon
+              |     -> bot meminta nomor via contact button atau input manual
+              |
+              +-- User lama
+                    -> bot memulai percakapan AI
+                    -> user mengirim teks/foto/lokasi
+                    -> DeepSeek mengekstrak kandidat data
+                    -> Python validator cek kelengkapan
+                    -> jika belum lengkap, bot bertanya field berikutnya
+                    -> jika lengkap, laporan disimpan ke Supabase
+                    -> bot mengirim kode tracking dan menampilkan tombol lapor lagi
 ```
+
+Tombol **📝 Saya mau lapor** hanya ditampilkan saat user tidak sedang mengisi laporan. Saat flow laporan berjalan, bot menyembunyikan tombol tersebut. Jika user menekan/mengetik tombol itu saat laporan masih aktif, bot tidak mereset laporan dan meminta user melanjutkan data yang sedang diminta.
 
 Syarat deterministik sebelum laporan disimpan:
 
@@ -276,11 +282,12 @@ Jangan jalankan `uvicorn` dan `python run_bot.py` bersamaan di port yang sama.
 1. Buka Telegram di HP/desktop
 2. Cari username bot kamu (yang didaftarkan di BotFather)
 3. Klik **Start** atau ketik `/start`
-4. Jika diminta nomor telepon, tekan contact button atau ketik nomor manual
-5. Jelaskan masalah sampah secara natural
-6. Kirim lokasi GPS saat diminta
-7. Kirim foto jika ada, atau balas `tidak ada foto`
-8. Tunggu kode tracking setelah laporan lolos validasi
+4. Tekan tombol **📝 Saya mau lapor**
+5. Jika diminta nomor telepon, tekan contact button atau ketik nomor manual
+6. Jelaskan masalah sampah secara natural
+7. Kirim lokasi GPS saat diminta
+8. Kirim foto jika ada, atau balas `tidak ada foto`
+9. Tunggu kode tracking setelah laporan lolos validasi
 
 ### Testing Notifikasi Status dari Web
 

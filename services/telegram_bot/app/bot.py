@@ -14,6 +14,8 @@ import json
 import base64
 import aiohttp
 import re
+import time
+from contextlib import suppress
 from datetime import datetime, timezone
 from app.kelurahan import KELURAHAN_OPTIONS, get_kelurahan_name
 from typing import TYPE_CHECKING, Dict, List, Any, Optional
@@ -41,6 +43,82 @@ deepseek_client = AsyncOpenAI(
 chat_history: Dict[int, List[dict]] = {}
 user_state: Dict[int, dict] = {} 
 
+MAIN_MENU_REPORT_TEXT = "📝 Saya mau lapor"
+MAIN_MENU_MESSAGE = (
+    "Selamat datang di ResikIn! 🙌\n\n"
+    "Saya bisa membantu Anda membuat laporan masalah sampah di Kota Yogyakarta. "
+    "Tekan tombol di bawah saat Anda ingin mulai melapor."
+)
+
+
+def main_menu_kb() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=MAIN_MENU_REPORT_TEXT)]],
+        resize_keyboard=True,
+        one_time_keyboard=False,
+    )
+
+
+def contact_kb() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📱 Bagikan Nomor Telepon", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def is_report_button_text(text: Optional[str]) -> bool:
+    normalized = (text or "").strip().lower()
+    return normalized in {
+        MAIN_MENU_REPORT_TEXT.lower(),
+        "saya mau lapor",
+        "mau lapor",
+        "lapor",
+    }
+
+
+def has_active_report_memory(user_id: int) -> bool:
+    return user_id in chat_history or user_id in user_state
+
+
+async def answer_idle_report_prompt(message: Message):
+    await message.answer(
+        "Untuk membuat laporan baru, tekan tombol di bawah terlebih dahulu.",
+        reply_markup=main_menu_kb(),
+    )
+
+
+def is_entrypoint_message(event: TelegramObject) -> bool:
+    if not isinstance(event, Message):
+        return False
+    text = (event.text or "").strip()
+    return text.startswith("/start") or is_report_button_text(text)
+
+
+async def keep_chat_action(chat_id: int, action: str, interval: float = 4.0):
+    bot = get_bot()
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await bot.send_chat_action(chat_id=chat_id, action=action)
+        except Exception:
+            logger.debug("Failed to send Telegram chat action", exc_info=True)
+
+
+async def run_with_chat_action(chat_id: int, action: str, awaitable):
+    try:
+        await get_bot().send_chat_action(chat_id=chat_id, action=action)
+    except Exception:
+        logger.debug("Failed to send initial Telegram chat action", exc_info=True)
+
+    action_task = asyncio.create_task(keep_chat_action(chat_id, action))
+    try:
+        return await awaitable
+    finally:
+        action_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await action_task
+
 class AntiSpamMiddleware(BaseMiddleware):
     def __init__(self):
         super().__init__()
@@ -59,12 +137,16 @@ class AntiSpamMiddleware(BaseMiddleware):
         now_ts = now.timestamp()
         today = now.strftime("%Y-%m-%d")
 
-        # 1. Cooldown 2 seconds
+        is_entrypoint = is_entrypoint_message(event)
+
+        # 1. Cooldown 2 seconds. Entrypoint actions must stay responsive because
+        # users often press Telegram's Start and the report button back-to-back.
         last_time = self.last_msg_time.get(user_id, 0)
-        if now_ts - last_time < 2.0:
+        if not is_entrypoint and now_ts - last_time < 2.0:
             return # Ignore flood
 
-        self.last_msg_time[user_id] = now_ts
+        if not is_entrypoint:
+            self.last_msg_time[user_id] = now_ts
 
         # 2. Daily limits
         if user_id not in self.daily_stats or self.daily_stats[user_id]["date"] != today:
@@ -130,11 +212,7 @@ async def _force_fallback(message: Message, state: FSMContext):
             telegram_id=telegram_id,
             reporter_name=_get_telegram_name(message.from_user),
         )
-        contact_kb = ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="📱 Bagikan Nomor Telepon", request_contact=True)]],
-            resize_keyboard=True, one_time_keyboard=True
-        )
-        await message.answer("Silakan tekan tombol di bawah untuk membagikan nomor telepon agar dapat melanjutkan:", reply_markup=contact_kb)
+        await message.answer("Silakan tekan tombol di bawah untuk membagikan nomor telepon agar dapat melanjutkan:", reply_markup=contact_kb())
         await state.set_state(ReportStates.INPUT_TELEPON)
 
 
@@ -552,7 +630,7 @@ async def save_report_from_state(user_id: int, message: Message):
         if tracking_code:
             msg += f"\n📋 Kode pelacakan Anda: {tracking_code}"
             
-        await message.answer(msg)
+        await message.answer(msg, reply_markup=main_menu_kb())
         
         if inserted_row:
             await _notify_koordinator_for_report(inserted_row)
@@ -622,48 +700,80 @@ async def cmd_start(message: Message, state: FSMContext):
 
     await state.clear()
     user_id = message.from_user.id
+    chat_history.pop(user_id, None)
+    user_state.pop(user_id, None)
+    await message.answer(MAIN_MENU_MESSAGE, reply_markup=main_menu_kb())
+
+
+async def _start_llm_report_flow(message: Message, state: FSMContext, existing: dict):
+    await state.clear()
+    user_id = message.from_user.id
+    chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    user_state[user_id] = _default_user_state(existing)
     
-    # INTERCEPT: Force phone number for new users
+    chat_history[user_id].append({"role": "user", "content": f"Halo, saya {_get_telegram_name(message.from_user)}. Saya ingin melapor masalah sampah."})
+    
+    try:
+        reply = await run_with_chat_action(message.chat.id, "typing", call_deepseek(user_id))
+        await process_llm_response(user_id, message, reply, state)
+    except DeepSeekTimeoutError:
+        await message.answer("⚠️ Sistem AI kami sedang mengalami gangguan jaringan. Mari kita gunakan mode pelaporan manual.", reply_markup=ReplyKeyboardRemove())
+        await _force_fallback(message, state)
+
+
+async def _begin_report_flow(message: Message, state: FSMContext):
+    started_at = time.perf_counter()
+    user_id = message.from_user.id
+    current_state = await state.get_state()
+    if current_state or has_active_report_memory(user_id):
+        await message.answer(
+            "Laporan Anda masih berjalan. Silakan lanjutkan dengan mengirim data yang diminta, atau ketik /start untuk membatalkan dan kembali ke menu awal.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+
+    await state.clear()
     telegram_id = str(user_id)
+    lookup_started_at = time.perf_counter()
     try:
         repo = get_repo()
         existing = await asyncio.to_thread(repo.find_reporter_by_telegram_id, telegram_id)
     except:
         existing = None
+    logger.info(
+        "Report start reporter lookup finished for user=%s in %.3fs",
+        user_id,
+        time.perf_counter() - lookup_started_at,
+    )
 
     if not existing or not existing.get("phone"):
         await state.update_data(
             telegram_id=telegram_id,
             reporter_name=_get_telegram_name(message.from_user),
         )
-        from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-        contact_kb = ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="📱 Bagikan Nomor Telepon", request_contact=True)]],
-            resize_keyboard=True, one_time_keyboard=True
-        )
-        await message.answer("Selamat datang di ResikIn! 🙌\n\nUntuk memulai, kami butuh nomor telepon Anda untuk keperluan petugas saat menindaklanjuti laporan.\n\nSilakan ketik nomor telepon Anda secara manual (contoh: 08123456789) ATAU tekan tombol **'📱 Bagikan Nomor Telepon'** di bawah.", reply_markup=contact_kb, parse_mode="Markdown")
+        await message.answer("Sebelum membuat laporan, kami butuh nomor telepon Anda untuk keperluan petugas saat menindaklanjuti laporan.\n\nSilakan ketik nomor telepon Anda secara manual (contoh: 08123456789) ATAU tekan tombol **'📱 Bagikan Nomor Telepon'** di bawah.", reply_markup=contact_kb(), parse_mode="Markdown")
         await state.set_state(ReportStates.INPUT_TELEPON)
+        logger.info(
+            "Report start phone prompt sent for new user=%s in %.3fs total",
+            user_id,
+            time.perf_counter() - started_at,
+        )
         return
 
-    chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    user_state[user_id] = _default_user_state(existing)
-    
-    chat_history[user_id].append({"role": "user", "content": f"Halo, saya {_get_telegram_name(message.from_user)}. Saya ingin melapor masalah sampah."})
-    
-    bot = get_bot()
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    
-    try:
-        reply = await call_deepseek(user_id)
-        await process_llm_response(user_id, message, reply, state)
-    except DeepSeekTimeoutError:
-        await message.answer("⚠️ Sistem AI kami sedang mengalami gangguan jaringan. Mari kita gunakan mode pelaporan manual.")
-        await _force_fallback(message, state)
+    await _start_llm_report_flow(message, state, existing)
+
+
+@router.message(F.text.func(is_report_button_text))
+async def handle_report_button(message: Message, state: FSMContext):
+    await _begin_report_flow(message, state)
 
 
 @router.message(StateFilter(None), F.text)
 async def handle_text_llm(message: Message, state: FSMContext):
     user_id = message.from_user.id
+    if not has_active_report_memory(user_id):
+        await answer_idle_report_prompt(message)
+        return
     if user_id not in chat_history:
         chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
     state_data = ensure_user_state(user_id)
@@ -673,11 +783,8 @@ async def handle_text_llm(message: Message, state: FSMContext):
 
     chat_history[user_id].append({"role": "user", "content": message.text})
     
-    bot = get_bot()
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    
     try:
-        reply = await call_deepseek(user_id)
+        reply = await run_with_chat_action(message.chat.id, "typing", call_deepseek(user_id))
         await process_llm_response(user_id, message, reply, state)
     except DeepSeekTimeoutError:
         await message.answer("⚠️ Sistem AI cerdas kami gagal memproses setelah 3 kali percobaan. Jangan khawatir, mari alihkan ke form manual.")
@@ -687,6 +794,9 @@ async def handle_text_llm(message: Message, state: FSMContext):
 @router.message(StateFilter(None), F.location)
 async def handle_location_llm(message: Message, state: FSMContext):
     user_id = message.from_user.id
+    if not has_active_report_memory(user_id):
+        await answer_idle_report_prompt(message)
+        return
     if user_id not in chat_history:
         chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
     state_data = ensure_user_state(user_id)
@@ -736,10 +846,8 @@ async def handle_location_llm(message: Message, state: FSMContext):
     
     # Selalu panggil AI setelah konfirmasi GPS agar percakapan lanjut
     chat_history[user_id].append({"role": "system", "content": "[System] Lokasi GPS sudah diterima. Lanjutkan tanya data yang masih kurang, atau keluarkan JSON jika semua data sudah lengkap."})
-    bot = get_bot()
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     try:
-        reply = await call_deepseek(user_id)
+        reply = await run_with_chat_action(message.chat.id, "typing", call_deepseek(user_id))
         await process_llm_response(user_id, message, reply, state)
     except DeepSeekTimeoutError:
         await message.answer("⚠️ Sistem AI sedang gangguan. Mari beralih ke form manual.", reply_markup=ReplyKeyboardRemove())
@@ -748,6 +856,9 @@ async def handle_location_llm(message: Message, state: FSMContext):
 @router.message(StateFilter(None), F.photo)
 async def handle_photo_llm(message: Message, state: FSMContext):
     user_id = message.from_user.id
+    if not has_active_report_memory(user_id):
+        await answer_idle_report_prompt(message)
+        return
     if user_id not in chat_history:
         chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
     state_data = ensure_user_state(user_id)
@@ -755,10 +866,9 @@ async def handle_photo_llm(message: Message, state: FSMContext):
     file_id = message.photo[-1].file_id
     state_data["photo_was_asked"] = True
     
-    bot = get_bot()
-    await bot.send_chat_action(chat_id=message.chat.id, action="upload_photo")
-    
     try:
+        bot = get_bot()
+        await bot.send_chat_action(chat_id=message.chat.id, action="upload_photo")
         file_info = await bot.get_file(file_id)
         downloaded_file = await bot.download_file(file_info.file_path)
         file_bytes = downloaded_file.read()
@@ -800,10 +910,8 @@ async def handle_photo_llm(message: Message, state: FSMContext):
 
     chat_history[user_id].append({"role": "system", "content": system_note})
     
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    
     try:
-        reply = await call_deepseek(user_id)
+        reply = await run_with_chat_action(message.chat.id, "typing", call_deepseek(user_id))
         await process_llm_response(user_id, message, reply, state)
     except DeepSeekTimeoutError:
         await message.answer("⚠️ Sistem AI gambar kami sedang gangguan. Mari kita gunakan pelaporan manual.")
@@ -856,8 +964,11 @@ async def handle_contact(message: Message, state: FSMContext):
         f"✅ Terima kasih! Nomor {phone} berhasil diamankan.",
         reply_markup=ReplyKeyboardRemove(),
     )
-    # Redirect back to LLM flow by calling cmd_start programmatically
-    await cmd_start(message, state)
+    await _start_llm_report_flow(
+        message,
+        state,
+        {"id": reporter_id, "name": reporter_name, "phone": phone},
+    )
 
 @router.message(StateFilter(ReportStates.INPUT_TELEPON))
 async def handle_phone_text_fallback(message: Message, state: FSMContext):
@@ -886,7 +997,11 @@ async def handle_phone_text_fallback(message: Message, state: FSMContext):
 
     await state.update_data(reporter_id=reporter_id, reporter_phone=phone)
     await message.answer(f"✅ Terima kasih! Nomor {phone} berhasil diamankan.", reply_markup=ReplyKeyboardRemove())
-    await cmd_start(message, state)
+    await _start_llm_report_flow(
+        message,
+        state,
+        {"id": reporter_id, "name": reporter_name, "phone": phone},
+    )
 
 @router.callback_query(StateFilter(ReportStates.PILIH_KELURAHAN), F.data.startswith("kel:"))
 async def handle_kelurahan(call: CallbackQuery, state: FSMContext):
@@ -1027,7 +1142,7 @@ async def handle_location(message: Message, state: FSMContext):
 async def handle_confirm_manual(call: CallbackQuery, state: FSMContext):
     decision = call.data.split(":", 1)[1] if call.data else ""
     if decision != "yes":
-        await call.message.answer("Laporan dibatalkan. Ketik /start untuk memulai lagi.")
+        await call.message.answer("Laporan dibatalkan. Tekan tombol di bawah jika ingin membuat laporan baru.", reply_markup=main_menu_kb())
         await state.clear()
         await call.answer()
         return
@@ -1069,7 +1184,7 @@ async def handle_confirm_manual(call: CallbackQuery, state: FSMContext):
             msg += f"\n📋 Kode tracking: {tracking_code}"
         elif inserted_id:
             msg += f"\n🆔 ID laporan: {inserted_id}"
-        await call.message.answer(msg)
+        await call.message.answer(msg, reply_markup=main_menu_kb())
 
         if inserted_row:
             await _notify_koordinator_for_report(inserted_row)

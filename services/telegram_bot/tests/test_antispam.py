@@ -37,6 +37,23 @@ async def test_antispam_ignores_second_message_inside_cooldown(bot_module):
 
 
 @pytest.mark.asyncio
+async def test_antispam_allows_start_and_report_button_inside_cooldown(bot_module):
+    middleware = bot_module.AntiSpamMiddleware()
+    start_event = make_message("/start")
+    report_event = make_message(bot_module.MAIN_MENU_REPORT_TEXT)
+    calls = []
+
+    async def handler(event, _data):
+        calls.append(event.text)
+        return "ok"
+
+    await middleware(handler, start_event, {"state": FakeState()})
+    await middleware(handler, report_event, {"state": FakeState()})
+
+    assert calls == ["/start", bot_module.MAIN_MENU_REPORT_TEXT]
+
+
+@pytest.mark.asyncio
 async def test_antispam_rejects_too_long_message(bot_module, monkeypatch):
     middleware = bot_module.AntiSpamMiddleware()
     event = make_message("x" * 2001)
