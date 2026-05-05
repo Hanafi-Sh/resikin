@@ -1,62 +1,98 @@
-# **System Context Document: Telegram Bot Pelaporan Sampah Jogja**
+# System Context Document: Telegram Bot Pelaporan Sampah Jogja
 
-## **1\. Project Overview**
+## 1. Project Overview
 
-Sistem ini bertujuan untuk menggantikan alur pelaporan sampah manual via WhatsApp yang membebani koordinator kelurahan (500-2.000 KK per kelurahan). Sistem memanfaatkan bot Telegram sebagai pintu masuk (input) tunggal untuk masyarakat , yang terhubung dengan sistem *backend* untuk validasi dan manajemen data. Target MVP difokuskan pada penyediaan kanal komunikasi yang jelas bagi warga dan *dashboard* manajemen sederhana bagi koordinator.
+Sistem ini menggantikan alur pelaporan sampah manual via WhatsApp yang membebani koordinator kelurahan. Telegram bot menjadi kanal input warga yang terhubung ke Supabase dan dashboard web ResikIn.
 
-## **2\. Tech Stack & Infrastructure**
+Target MVP tetap sama: warga bisa mengirim laporan yang cukup lengkap, koordinator bisa memverifikasi laporan, petugas bisa menerima tugas, dan warga bisa melacak status.
 
-* **Backend Framework:** Python dengan FastAPI.
+## 2. Tech Stack & Infrastructure
 
-* **Telegram Library:** aiogram (mendukung *asynchronous* dan *Finite State Machine* / FSM).
+- **Backend Framework:** Python dengan FastAPI.
+- **Telegram Library:** aiogram 3.x dengan FSM untuk fallback/manual flow.
+- **Conversational AI:** DeepSeek via OpenAI-compatible SDK.
+- **Image AI:** AI microservice melalui `AI_SERVICE_URL`.
+- **Database:** Supabase PostgreSQL.
+- **Dev Runtime:** Long polling Telegram.
+- **API Runtime:** `run_bot.py` menjalankan FastAPI di background thread dan Telegram polling di main thread.
 
-* **Database:** Supabase (PostgreSQL).
+## 3. Core Architectural Decisions & Constraints
 
-* **Dev Environment:** Long Polling untuk *development* lokal.
+AI agent atau developer yang mengubah bot wajib mematuhi prinsip berikut:
 
-* **Prod Environment:** Webhook untuk *deployment* akhir.
+- **Single Bot Architecture:** Satu bot terpusat untuk semua 45 kelurahan Kota Yogyakarta. Tidak ada multi-tenant bot token.
+- **Hybrid AI + Deterministic Validator:** DeepSeek boleh mengarahkan percakapan dan mengekstrak kandidat data, tetapi Python validator adalah sumber kebenaran akhir sebelum laporan disimpan.
+- **FSM Fallback:** FSM aiogram tetap wajib dipertahankan untuk fallback saat AI timeout, user terkena limit, atau bot membutuhkan pilihan manual seperti kelurahan/kategori.
+- **No Supabase Storage:** Foto Telegram tidak diunggah ke Supabase Storage. Bot menyimpan `file_id`/`file_ids`, dan FastAPI menyediakan endpoint proxy gambar.
+- **Simple Spatial Data:** Koordinat disimpan sebagai `latitude` dan `longitude` float, bukan PostGIS.
+- **External Web App:** Dashboard/tracking dibuka lewat link web biasa, bukan Telegram Mini App.
+- **AI Failure Must Be Safe:** Jika DeepSeek atau AI image service gagal, bot tidak boleh menyimpan laporan yang tidak lengkap. Fallback ke FSM/manual prompt harus tersedia.
 
-## **3\. Core Architectural Decisions & Constraints**
+## 4. Expected Bot Flow
 
-AI Agent WAJIB mematuhi arsitektur berikut saat meng- *generate* kode:
+Flow utama saat ini bukan FSM linear penuh, tetapi hybrid:
 
-* **Single Bot Architecture:** Menggunakan satu entitas bot terpusat untuk semua 45 kelurahan di Jogja. Pengguna wajib memilih kelurahan mereka di awal alur pelaporan. Tidak ada implementasi *multi-tenant bot token*.
+1. **/start**
+   - Jika user belum punya nomor telepon, bot meminta contact button atau input nomor manual.
+   - Jika user lama sudah punya nomor telepon, bot mulai mode percakapan AI.
 
-* **Sequential Input (FSM):** API Telegram tidak mengirimkan foto, teks, dan lokasi dalam satu *request*. Oleh karena itu, *state management* (FSM) via aiogram WAJIB diimplementasikan secara terurut: PILIH\_KELURAHAN \-\> UPLOAD\_FOTO \-\> INPUT\_DESKRIPSI \-\> SHARE\_LOCATION.
+2. **Percakapan AI**
+   - User bisa menjelaskan masalah secara natural.
+   - DeepSeek mengekstrak kandidat: nama, deskripsi, kelurahan, kategori.
+   - Bot menyimpan progres di `user_state`.
 
-* **No Supabase Storage (MVP Hack):** Mengingat keterbatasan *resource* dan efisiensi, sistem TIDAK mengunggah file foto ke Supabase Storage. *Backend* hanya akan menyimpan file\_id dari Telegram API ke dalam PostgreSQL. *Backend* harus menyediakan sebuah *endpoint proxy* yang akan mengunduh dan men-*serve* gambar dari Telegram API secara *on-demand* (dengan *caching*) saat *frontend web* memintanya.
+3. **Lokasi GPS**
+   - Lokasi wajib berasal dari Telegram location.
+   - Bot mencoba reverse geocoding via Nominatim/OpenStreetMap.
+   - Jika kelurahan hasil GPS bisa dipetakan ke daftar resmi, `kelurahan_id` diisi otomatis.
+   - Jika tidak bisa dipetakan, bot meminta pilihan kelurahan manual.
 
-* **Data Spasial Simpel:** Koordinat lokasi dari Telegram disimpan menggunakan format *flat columns* bertipe float8 (latitude dan longitude) di dalam Supabase, bukan ekstensi PostGIS, untuk mempercepat iterasi MVP.
+4. **Foto**
+   - Foto opsional, tetapi bot harus pernah menanyakan foto.
+   - Jika user mengirim foto, bot memvalidasi gambar lewat `AI_SERVICE_URL`.
+   - Foto valid disimpan sebagai Telegram `file_id`.
+   - Foto spam/non-sampah tidak dihitung sebagai bukti laporan.
+   - User boleh lanjut tanpa foto dengan menjawab seperti `tidak ada foto`, `skip`, atau `lewati`.
 
-* **External Web App:** Integrasi *frontend dashboard* dilakukan murni via eksternal *link button* (membuka *browser* bawaan OS), bukan di-*embed* sebagai Telegram Mini App.
+5. **Deterministic Validation**
+   - Laporan hanya boleh disimpan jika validator Python menyatakan lengkap.
+   - DeepSeek JSON `status: complete` hanya dianggap kandidat, bukan keputusan final.
 
-## **4\. Expected Bot Flow (Finite State Machine)**
+6. **Persistence**
+   - Bot menyimpan laporan ke Supabase dengan `source='telegram'` dan status awal `dikirim`.
+   - Repository membuat entry awal di `status_history`.
+   - Bot mengirim kode tracking ke warga.
 
-Alur interaksi bot dengan pengguna harus berjalan persis seperti ini:
+## 5. Required Validation Before Save
 
-1. **/start:** Bot merespons dengan ucapan selamat datang dan *Inline Keyboard* berisi daftar kelurahan.  
-2. **State: PILIH\_KELURAHAN:** Pengguna memilih kelurahan. Bot mengonfirmasi dan meminta foto.  
-3. **State: UPLOAD\_FOTO:** Pengguna mengunggah gambar tumpukan sampah. Bot menangkap file\_id  dan meminta deskripsi teks.
+Sebelum membuat `Report`, validator wajib memastikan:
 
-4. **State: INPUT\_DESKRIPSI:** Pengguna mengetik detail pelaporan. Bot meminta koordinat lokasi.  
-5. **State: SHARE\_LOCATION:** Pengguna mengirimkan *attachment location*. Bot merangkum laporan, meminta konfirmasi akhir.  
-6. **Data Persistence:** Setelah dikonfirmasi, data disuntikkan ke Supabase, bot mengirim ID Laporan/Status penerimaan ke pengguna, dan FSM di-*reset*.
+- `reporter_name` ada.
+- `description` minimal 10 karakter.
+- `latitude` dan `longitude` ada.
+- `kelurahan_id` cocok dengan salah satu dari 45 kelurahan resmi.
+- `category` termasuk kategori resmi: `tidak_terangkut`, `tps_penuh`, `sampah_liar`, `bau`, `lainnya`.
+- Salah satu benar: `photo_received=True` atau `photo_declined=True`.
 
-## **5\. Base API Contract (Database Schema Draft)**
+Jika ada field kurang, bot harus bertanya field paling prioritas dan tidak menyimpan laporan.
 
-Tabel pelaporan (misal: reports) minimal harus memuat skema berikut:
+## 6. Base Data Contract
 
-* id (UUID, Primary Key)  
-* user\_id (String/BigInt, ID Telegram pengguna)  
-* kelurahan\_id (Integer/String, referensi lokasi kelurahan)  
-* file\_id (String, referensi gambar di server Telegram)
+Payload laporan dari bot ke Supabase minimal berisi:
 
-* description (Text)  
-* latitude (Float8)
+- `id` UUID
+- `user_id` Telegram user ID
+- `reporter_id`
+- `reporter_name`
+- `reporter_phone`
+- `kelurahan_id`
+- `category`
+- `file_ids`
+- `description`
+- `latitude`
+- `longitude`
+- `status='dikirim'`
+- `source='telegram'`
+- `metadata`
 
-* longitude (Float8)
-
-* status (Enum: pending, valid, invalid, resolved)  
-* metadata (JSONB, celah fleksibilitas untuk *frontend* menambahkan atribut tanpa memecah skema *backend*)  
-* created\_at (Timestamp)
-
+`tracking_code` dihasilkan oleh database trigger.
