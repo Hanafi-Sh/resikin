@@ -14,6 +14,8 @@ Sistem ini terdiri dari **dua komponen utama**:
 
 ### 🌐 Web App
 - **📝 Pelaporan Warga** — Form digital sederhana, tanpa perlu membuat akun
+- **🤖 Validasi Foto AI** — Foto laporan dianalisis lewat AI microservice untuk mendeteksi apakah gambar relevan dengan sampah
+- **🧭 Rekomendasi Petugas AI** — Dashboard dapat meminta rekomendasi penugasan petugas berdasarkan kategori dan beban kerja aktif
 - **🔍 Tracking Realtime** — Pantau status laporan dengan nomor tracking unik
 - **📊 Dashboard Koordinator** — Kelola semua laporan dari satu tempat
 - **👷 Panel Petugas** — Daftar tugas harian dengan navigasi lokasi
@@ -21,10 +23,11 @@ Sistem ini terdiri dari **dua komponen utama**:
 - **📋 Info Publik** — Pengumuman dan tips kebersihan
 
 ### 🤖 Telegram Bot
-- **💬 Pelaporan via Chat** — Warga bisa melapor langsung dari Telegram tanpa buka browser
-- **📷 Upload Foto** — Kirim foto tumpukan sampah langsung di chat
-- **📍 Share Lokasi** — Gunakan fitur location Telegram untuk titik koordinat yang akurat
-- **🏘️ Pilih Kelurahan** — 45 kelurahan di Kota Yogyakarta tersedia sebagai pilihan
+- **💬 Pelaporan via Chat AI** — Warga bisa melapor langsung dari Telegram dengan percakapan natural berbasis DeepSeek
+- **🛡️ Guardrail Deterministik** — Data laporan tetap divalidasi Python sebelum disimpan, sehingga AI tidak menjadi sumber kebenaran akhir
+- **📷 Foto Opsional + Validasi AI** — Foto bisa dikirim dari chat dan divalidasi lewat AI service; warga juga bisa lanjut tanpa foto
+- **📍 Share Lokasi Wajib** — Gunakan fitur location Telegram untuk titik koordinat yang akurat
+- **🏘️ Deteksi/Pilih Kelurahan** — Bot mencoba membaca kelurahan dari GPS dan fallback ke pilihan manual 45 kelurahan Yogyakarta
 - **📋 Kode Tracking** — Setiap laporan mendapat kode tracking otomatis (format: `RSK-YYYYMMDD-XXXXX`)
 - **🔔 Update Status** — Mengirim pesan ke warga saat laporan diterima, ditugaskan, diproses, selesai, atau ditolak
 
@@ -41,6 +44,7 @@ Sistem ini terdiri dari **dua komponen utama**:
 | Database | Supabase (PostgreSQL + Realtime) |
 | Auth | Supabase Auth |
 | Maps | Leaflet.js + OpenStreetMap |
+| AI Proxy | Next.js API Routes ke AI microservice |
 | Deploy | Vercel |
 
 ### Telegram Bot
@@ -49,6 +53,8 @@ Sistem ini terdiri dari **dua komponen utama**:
 |-------|-----------|
 | Bot Framework | aiogram 3.27 (Python, async) |
 | API Server | FastAPI (notifikasi status, image proxy & health check) |
+| Conversational AI | DeepSeek via OpenAI-compatible SDK |
+| Image AI | Python AI microservice via `AI_SERVICE_URL` |
 | Database | Supabase (shared dengan web app) |
 | Runtime | Python 3.12+ |
 
@@ -80,6 +86,8 @@ cp .env.local.example .env.local
 #   - BOT_NOTIFY_URL (contoh: https://bot.example.com)
 #   - BOT_NOTIFY_SECRET (shared secret)
 #   - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME (untuk deep link /start)
+# Optional (AI microservice):
+#   - AI_SERVICE_URL (contoh: https://ai.example.com)
 
 # 4. Setup database
 # Buka Supabase Dashboard → SQL Editor
@@ -115,13 +123,11 @@ cp .env.example .env
 #   - SUPABASE_SERVICE_ROLE_KEY
 #   - NOTIFY_WEBHOOK_SECRET (harus sama dengan BOT_NOTIFY_SECRET)
 #   - APP_BASE_URL (URL web publik untuk tombol notifikasi Telegram)
+#   - DEEPSEEK_API_KEY (untuk percakapan AI bot)
+#   - AI_SERVICE_URL (untuk validasi foto dari bot)
 
-# 4. Jalankan bot polling
+# 4. Jalankan bot + FastAPI notification server dalam satu proses
 python run_bot.py
-
-# 5. Di terminal lain, jalankan FastAPI bot service
-# Wajib untuk notifikasi status dan proxy foto Telegram.
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 > 📖 Dokumentasi lengkap Telegram bot tersedia di [`services/telegram_bot/README.md`](services/telegram_bot/README.md)
@@ -180,6 +186,8 @@ Alur notifikasi status berjalan lintas dua service:
 4. FastAPI bot service mencari Telegram ID warga dari tabel `reporters`, lalu mengirim pesan Telegram.
 5. Pesan berisi tombol **Lacak Laporan** ke `APP_BASE_URL/tracking?code=<tracking_code>`.
 
+`run_bot.py` terbaru menjalankan Telegram long polling dan FastAPI notification server sekaligus. FastAPI tetap dapat dijalankan terpisah dengan `uvicorn app.main:app` jika hanya ingin men-debug endpoint API, tetapi untuk operasi bot normal cukup jalankan `python run_bot.py`.
+
 Karena tombol Telegram harus memakai URL publik, `APP_BASE_URL` tidak boleh `localhost` jika dibuka dari HP. Untuk testing lokal, gunakan tunnel seperti ngrok atau Cloudflare Tunnel.
 
 Untuk testing paling stabil lewat tunnel:
@@ -192,18 +200,32 @@ npm run start
 # Terminal 2: tunnel ke web
 ngrok http 3000
 
-# Terminal 3: bot polling
+# Terminal 3: bot polling + FastAPI bot service
 cd services/telegram_bot
 source .venv/bin/activate
 python run_bot.py
-
-# Terminal 4: FastAPI bot service
-cd services/telegram_bot
-source .venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Jika memakai `npm run dev` lewat ngrok, tambahkan domain ngrok ke `allowedDevOrigins` di `next.config.mjs`, atau gunakan wildcard seperti `*.ngrok-free.dev`. Dev mode memakai HMR/WebSocket dan bisa kurang stabil lewat tunnel.
+
+## 🤖 AI Services
+
+ResikIn memakai AI di dua tempat:
+
+| Area | Env | Fungsi |
+|------|-----|--------|
+| Web App | `AI_SERVICE_URL` | Proxy validasi foto laporan dan rekomendasi petugas ke AI microservice |
+| Telegram Bot | `DEEPSEEK_API_KEY` | Percakapan natural dan ekstraksi data laporan |
+| Telegram Bot | `AI_SERVICE_URL` | Validasi foto dari Telegram sebelum dianggap bukti sampah |
+
+Endpoint AI microservice yang dipakai web app:
+
+```txt
+POST <AI_SERVICE_URL>/api/ai/validate-image
+POST <AI_SERVICE_URL>/api/ai/recommend-assignment
+```
+
+Di web app, `AI_SERVICE_URL` adalah base URL service. Di bot Telegram, `AI_SERVICE_URL` menunjuk langsung ke endpoint validasi foto, misalnya `https://ai.example.com/api/validate-image`. Jika AI service tidak tersedia, web route akan memberi respons error/fallback sesuai endpoint, sedangkan bot tetap melanjutkan percakapan dengan guardrail Python agar laporan tidak tersimpan dalam kondisi tidak lengkap.
 
 ## 🗄️ Database
 
