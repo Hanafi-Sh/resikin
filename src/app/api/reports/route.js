@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { generateTrackingCode } from '@/lib/utils';
+import { withTelegramReportPhotosList } from '@/lib/telegram-photos';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +57,7 @@ export async function GET(request) {
   }
 
   return NextResponse.json({
-    reports: data,
+    reports: withTelegramReportPhotosList(data),
     total: count,
     page,
     totalPages: Math.ceil((count || 0) / limit),

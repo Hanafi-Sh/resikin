@@ -24,6 +24,8 @@ AI agent atau developer yang mengubah bot wajib mematuhi prinsip berikut:
 - **Hybrid AI + Deterministic Validator:** DeepSeek boleh mengarahkan percakapan dan mengekstrak kandidat data, tetapi Python validator adalah sumber kebenaran akhir sebelum laporan disimpan.
 - **FSM Fallback:** FSM aiogram tetap wajib dipertahankan untuk fallback saat AI timeout, user terkena limit, atau bot membutuhkan pilihan manual seperti kelurahan/kategori.
 - **No Supabase Storage:** Foto Telegram tidak diunggah ke Supabase Storage. Bot menyimpan `file_id`/`file_ids`, dan FastAPI menyediakan endpoint proxy gambar.
+- **Web Photo Normalization:** Web app menormalisasi `reports.file_ids` menjadi item `report_photos` sementara dengan URL `BOT_NOTIFY_URL/telegram/file/{file_id}` agar UI bisa menampilkan foto Telegram dan foto Storage dengan bentuk data yang sama.
+- **Completion Photos Are Web-Owned:** Foto bukti penyelesaian petugas bukan bagian dari flow Telegram. Foto ini di-upload oleh web app ke Supabase Storage dan disimpan di `report_photos` dengan `type='completion'`.
 - **Simple Spatial Data:** Koordinat disimpan sebagai `latitude` dan `longitude` float, bukan PostGIS.
 - **External Web App:** Dashboard/tracking dibuka lewat link web biasa, bukan Telegram Mini App.
 - **AI Failure Must Be Safe:** Jika DeepSeek atau AI image service gagal, bot tidak boleh menyimpan laporan yang tidak lengkap. Fallback ke FSM/manual prompt harus tersedia.

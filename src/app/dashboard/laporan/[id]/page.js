@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, CheckCircle2, XCircle, UserPlus, MapPin, Clock,
-  Phone, User, Loader2, ExternalLink, Image as ImageIcon,
+  Phone, User, Loader2, ExternalLink,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import ReportPhotoGallery from '@/components/ui/ReportPhotoGallery';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { cn, formatDateTime } from '@/lib/utils';
 import { REPORT_STATUS_LABELS, REPORT_CATEGORY_LABELS, REPORT_STATUS } from '@/lib/constants';
@@ -153,17 +154,7 @@ export default function LaporanDetailPage({ params }) {
             {/* Photos */}
             {report.report_photos?.filter(p => p.type === 'report').length > 0 && (
               <Card className="p-6">
-                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">
-                  <ImageIcon className="w-4 h-4 inline mr-1.5" />
-                  Foto Laporan
-                </h2>
-                <div className="grid grid-cols-3 gap-3">
-                  {report.report_photos.filter(p => p.type === 'report').map((photo) => (
-                    <a key={photo.id} href={photo.photo_url} target="_blank" rel="noopener" className="block rounded-xl overflow-hidden border border-slate-200 hover:border-emerald-300 transition aspect-square">
-                      <img src={photo.photo_url} alt="" className="w-full h-full object-cover" />
-                    </a>
-                  ))}
-                </div>
+                <ReportPhotoGallery photos={report.report_photos.filter(p => p.type === 'report')} />
               </Card>
             )}
 
