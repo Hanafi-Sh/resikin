@@ -46,6 +46,15 @@ jobs:
               echo "== Synced commit =="
               git log -1 --oneline
               git rev-parse HEAD
+
+              echo "== Sync bot runtime files =="
+              rsync -a --delete \
+                --exclude venv \
+                --exclude .env \
+                --exclude __pycache__ \
+                "$REPO_DIR/services/telegram_bot/" "$BOT_DIR/"
+              find "$BOT_DIR" -type d -name __pycache__ -prune -exec rm -rf {} +
+              find "$BOT_DIR" -name "*.pyc" -delete
             else
               echo "No git repository containing services/telegram_bot found under /home/ubuntu."
               echo "Falling back to the VPS deploy script."
