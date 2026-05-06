@@ -7,6 +7,12 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from app.config import settings
 from app.bot import get_bot
 from app.kelurahan import get_kelurahan_name
+from app.notification_contract import (
+    REPORT_ASSIGNED,
+    REPORT_CREATED,
+    REPORT_STATUS_CHANGED,
+    validate_report_notification_payload,
+)
 
 router = APIRouter()
 
@@ -87,10 +93,13 @@ async def notify_report(payload: dict, x_resikin_secret: Optional[str] = Header(
     if settings.NOTIFY_WEBHOOK_SECRET and x_resikin_secret != settings.NOTIFY_WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    event = payload.get("event")
-    report_id = payload.get("report_id")
-    if not event or not report_id:
-        raise HTTPException(status_code=400, detail="Missing event or report_id")
+    try:
+        payload = validate_report_notification_payload(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    event = payload["event"]
+    report_id = payload["report_id"]
 
     from repositories.supabase_repo import SupabaseRepo
     repo = SupabaseRepo()
@@ -99,7 +108,7 @@ async def notify_report(payload: dict, x_resikin_secret: Optional[str] = Header(
         raise HTTPException(status_code=404, detail="Report not found")
 
     markup = None
-    if event == "created":
+    if event == REPORT_CREATED:
         links = repo.get_telegram_links_by_kelurahan(report.get("kelurahan_id"), "koordinator")
         telegram_ids = [l.get("telegram_id") for l in links if l.get("telegram_id")]
         text = _format_report_message(report, "📣 LAPORAN BARU MASUK!\nSegera verifikasi laporan warga berikut:")
@@ -111,7 +120,7 @@ async def notify_report(payload: dict, x_resikin_secret: Optional[str] = Header(
         )
         markup = InlineKeyboardMarkup(inline_keyboard=[[btn]])
         
-    elif event == "assigned":
+    elif event == REPORT_ASSIGNED:
         petugas_id = payload.get("petugas_id")
         if not petugas_id:
             return {"sent": 0, "reason": "missing_petugas_id"}
@@ -129,7 +138,7 @@ async def notify_report(payload: dict, x_resikin_secret: Optional[str] = Header(
         )
         markup = InlineKeyboardMarkup(inline_keyboard=[[btn]])
 
-    elif event == "status_changed":
+    elif event == REPORT_STATUS_CHANGED:
         new_status = payload.get("new_status") or report.get("status")
         telegram_id = _get_reporter_telegram_id(repo, report)
         if not telegram_id:

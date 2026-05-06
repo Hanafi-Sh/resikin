@@ -51,28 +51,33 @@ export default function TugasDetailPage({ params }) {
     setActionError('');
 
     try {
+      const uploadedCompletionUrls = [];
+
       // Upload completion photos if marking as selesai
       if (newStatus === 'selesai' && completionPhotos.length > 0) {
         for (const photo of completionPhotos) {
           const formData = new FormData();
           formData.append('file', photo.file);
-          formData.append('report_id', assignment.report.id);
-          formData.append('type', 'completion');
           const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
           const uploadData = await uploadRes.json();
 
           if (!uploadRes.ok || !uploadData.success) {
             throw new Error(uploadData.error || 'Foto bukti penyelesaian gagal diunggah');
           }
+
+          uploadedCompletionUrls.push(uploadData.url);
         }
-        setCompletionPhotos([]);
       }
 
       // Update report status
       const res = await fetch(`/api/reports/${assignment.report.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, notes }),
+        body: JSON.stringify({
+          status: newStatus,
+          notes,
+          completion_photo_urls: uploadedCompletionUrls,
+        }),
       });
 
       const data = await res.json();
@@ -80,6 +85,7 @@ export default function TugasDetailPage({ params }) {
         throw new Error(data.error || 'Status tugas gagal diperbarui');
       }
 
+      setCompletionPhotos([]);
       await fetchAssignment();
     } catch (error) {
       setActionError(error.message || 'Terjadi kesalahan saat memperbarui tugas. Silakan coba lagi.');
