@@ -99,6 +99,8 @@ cp .env.local.example .env.local
 #   - supabase/migrations/003_multi_photo_support.sql
 #   - supabase/migrations/004_reporters_and_categories.sql
 #   - supabase/migrations/003_telegram_linking_and_sectors.sql
+#   - supabase/migrations/005_create_report_intake_function.sql
+#   - supabase/migrations/006_create_report_workflow_function.sql
 
 # 5. Run development server
 npm run dev
@@ -312,8 +314,15 @@ Menggunakan **Supabase** (PostgreSQL). File migration yang harus dijalankan:
 | `003_multi_photo_support.sql` | Dukungan multi foto laporan |
 | `004_reporters_and_categories.sql` | Tabel `reporters` untuk identitas warga Telegram dan relasi `reports.reporter_id` |
 | `003_telegram_linking_and_sectors.sql` | Menambahkan tabel `sectors`, `sector_kelurahan`, dan tabel linking Telegram untuk koordinator/petugas |
+| `005_create_report_intake_function.sql` | Memusatkan pembuatan laporan baru, kode tracking, foto awal, dan status history awal dalam fungsi database |
+| `006_create_report_workflow_function.sql` | Memusatkan perubahan status, assignment, foto penyelesaian, dan status history alur penanganan laporan dalam fungsi database |
 
 > Jalankan di Supabase Dashboard → SQL Editor. Perhatikan dependensi: `004_reporters_and_categories.sql` membutuhkan fungsi `update_updated_at_column()` dari migration awal.
+> Urutan canonical juga dicatat di [`docs/database/migration-order.md`](docs/database/migration-order.md).
+
+## 🔔 Kontrak Notifikasi
+
+Kontrak event antara web app dan Telegram bot service dicatat di [`docs/contracts/report-notifications.md`](docs/contracts/report-notifications.md). Kode baru harus memakai event canonical `report.created`, `report.assigned`, dan `report.status_changed`.
 
 ---
 

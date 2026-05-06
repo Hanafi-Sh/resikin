@@ -1,21 +1,22 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { generateTrackingCode } from '@/lib/utils';
-import { withTelegramReportPhotosList } from '@/lib/telegram-photos';
+import { withReportGalleryList } from '@/lib/report-gallery';
+import { REPORT_NOTIFICATION_EVENTS, buildReportNotificationPayload } from '@/lib/report-notifications.mjs';
 
 export const dynamic = 'force-dynamic';
 
-async function notifyBot(event, reportId) {
+async function notifyBot(event, fields) {
   const notifyUrl = process.env.BOT_NOTIFY_URL;
   if (!notifyUrl) return;
   try {
+    const payload = buildReportNotificationPayload(event, fields);
     await fetch(`${notifyUrl}/notifications/report`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-resikin-secret': process.env.BOT_NOTIFY_SECRET || '',
       },
-      body: JSON.stringify({ event, report_id: reportId }),
+      body: JSON.stringify(payload),
     });
   } catch {
     // ignore notification errors for now
@@ -57,7 +58,7 @@ export async function GET(request) {
   }
 
   return NextResponse.json({
-    reports: withTelegramReportPhotosList(data),
+    reports: withReportGalleryList(data),
     total: count,
     page,
     totalPages: Math.ceil((count || 0) / limit),
@@ -82,63 +83,31 @@ export async function POST(request) {
       );
     }
 
-    // Generate tracking code
-    // Get today's report count for sequence number
-    const today = new Date().toISOString().slice(0, 10);
-    const { count } = await supabase
-      .from('reports')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', `${today}T00:00:00`)
-      .lte('created_at', `${today}T23:59:59`);
-
-    const trackingCode = generateTrackingCode((count || 0) + 1);
-
-    // Insert report
     const { data: report, error: reportError } = await supabase
-      .from('reports')
-      .insert({
-        tracking_code: trackingCode,
-        reporter_name,
-        reporter_phone,
-        category,
-        description,
-        latitude: latitude || null,
-        longitude: longitude || null,
-        address: address || null,
-        status: 'dikirim',
+      .rpc('create_report_intake', {
+        p_reporter_name: reporter_name,
+        p_reporter_phone: reporter_phone,
+        p_category: category,
+        p_description: description,
+        p_latitude: latitude || null,
+        p_longitude: longitude || null,
+        p_address: address || null,
+        p_photo_urls: Array.isArray(photo_urls) ? photo_urls : [],
+        p_source: 'web',
+        p_status_history_notes: 'Laporan dibuat oleh warga',
       })
-      .select()
       .single();
 
     if (reportError) {
       return NextResponse.json({ error: reportError.message }, { status: 500 });
     }
 
-    // Insert photos if provided
-    if (photo_urls && photo_urls.length > 0) {
-      const photos = photo_urls.map((url) => ({
-        report_id: report.id,
-        photo_url: url,
-        type: 'report',
-      }));
-
-      await supabase.from('report_photos').insert(photos);
-    }
-
-    // Insert initial status history
-    await supabase.from('status_history').insert({
-      report_id: report.id,
-      old_status: null,
-      new_status: 'dikirim',
-      notes: 'Laporan dibuat oleh warga',
-    });
-
     // Notify koordinator for new report
-    await notifyBot('created', report.id);
+    await notifyBot(REPORT_NOTIFICATION_EVENTS.CREATED, { report_id: report.id });
 
     return NextResponse.json({
       success: true,
-      tracking_code: trackingCode,
+      tracking_code: report.tracking_code,
       report_id: report.id,
     }, { status: 201 });
 

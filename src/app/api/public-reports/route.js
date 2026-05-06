@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { withTelegramReportPhotosList } from '@/lib/telegram-photos';
+import { withReportGalleryList } from '@/lib/report-gallery';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +25,6 @@ export async function GET(request) {
   }
 
   return NextResponse.json({
-    reports: withTelegramReportPhotosList(data),
+    reports: withReportGalleryList(data),
   });
 }

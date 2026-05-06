@@ -1,5 +1,6 @@
 import TrackingClient from './TrackingClient';
 import { createClient } from '@/lib/supabase/server';
+import { withReportGallery } from '@/lib/report-gallery';
 
 async function getInitialReport(code) {
   if (!code) return { report: null, error: '' };
@@ -15,6 +16,7 @@ async function getInitialReport(code) {
       address,
       status,
       reject_reason,
+      file_ids,
       created_at,
       updated_at,
       report_photos(id, photo_url, type, uploaded_at),
@@ -34,7 +36,7 @@ async function getInitialReport(code) {
     report.status_history.sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at));
   }
 
-  return { report, error: '' };
+  return { report: withReportGallery(report), error: '' };
 }
 
 export default async function TrackingPage({ searchParams }) {

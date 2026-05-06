@@ -229,8 +229,11 @@ Pastikan migration SQL sudah dijalankan di Supabase SQL Editor **(secara berurut
 3. `supabase/migrations/003_multi_photo_support.sql` — Dukungan multi foto laporan
 4. `supabase/migrations/004_reporters_and_categories.sql` — Tabel `reporters` dan kategori laporan
 5. `supabase/migrations/003_telegram_linking_and_sectors.sql` — Linking Telegram koordinator/petugas dan sektor
+6. `supabase/migrations/005_create_report_intake_function.sql` — Fungsi database untuk membuat laporan baru, kode tracking, foto awal, dan status history awal
+7. `supabase/migrations/006_create_report_workflow_function.sql` — Fungsi database untuk perubahan status, assignment, foto penyelesaian, dan status history alur penanganan laporan
 
 > Buka Supabase Dashboard → SQL Editor → copy-paste isi file → Run.
+> Urutan canonical juga dicatat di [`../../docs/database/migration-order.md`](../../docs/database/migration-order.md).
 
 ### Langkah 5: Jalankan Bot
 
@@ -301,6 +304,8 @@ Untuk notifikasi perubahan status ke warga:
 
 Pesan status dikirim untuk perubahan status yang benar-benar berubah. PATCH ke status yang sama tidak mengirim pesan ulang.
 
+Kontrak event antara web app dan bot service dicatat di [`../../docs/contracts/report-notifications.md`](../../docs/contracts/report-notifications.md). Kode baru harus memakai event canonical `report.created`, `report.assigned`, dan `report.status_changed`; alias lama masih diterima sementara untuk kompatibilitas.
+
 ---
 
 ## 🔐 Environment Variables
@@ -343,7 +348,7 @@ Bot memerlukan beberapa migration yang membuat tabel/kolom berikut tersedia:
 | `telegram_links` | Akun Telegram koordinator/petugas untuk notifikasi |
 | `status_history` | Riwayat status, termasuk status awal dari laporan bot |
 
-Bot menyimpan status awal `dikirim` dan repository akan membuat entry awal di `status_history` dengan catatan laporan dibuat melalui bot Telegram.
+Bot mengirim data laporan ke fungsi database `create_report_intake`. Fungsi ini menyimpan status awal `dikirim`, membuat kode tracking, dan membuat entry awal di `status_history` dengan catatan laporan dibuat melalui bot Telegram.
 
 ## 🧠 AI Flow & Guardrails
 
@@ -591,7 +596,7 @@ Test suite mencakup:
 - Anti-spam middleware.
 - FSM manual fallback.
 - Endpoint notifikasi FastAPI.
-- Repository `status_history` dan runner `run_bot.py`.
+- Repository Laporan Intake dan runner `run_bot.py`.
 
 External service seperti Telegram, Supabase, DeepSeek, Nominatim, dan AI microservice dimock di unit test.
 

@@ -2,46 +2,58 @@ import importlib
 from types import SimpleNamespace
 
 
-def test_insert_report_creates_initial_status_history(monkeypatch):
+def test_insert_report_uses_report_intake_function(monkeypatch):
     import repositories.supabase_repo as repo_module
 
-    calls = []
+    calls = {}
 
-    class Query:
-        def __init__(self, table_name):
-            self.table_name = table_name
-
-        def insert(self, payload):
-            calls.append((self.table_name, payload))
+    class Client:
+        def rpc(self, function_name, payload):
+            calls["function_name"] = function_name
+            calls["payload"] = payload
             return self
 
         def execute(self):
-            if self.table_name == "reports":
-                return SimpleNamespace(data=[{"id": "report-1", "tracking_code": "RSK-001"}])
-            return SimpleNamespace(data=[{"id": "history-1"}])
-
-    class Client:
-        def table(self, table_name):
-            return Query(table_name)
+            return SimpleNamespace(data=[{"id": "report-1", "tracking_code": "RSK-001"}])
 
     monkeypatch.setattr(repo_module.settings, "SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setattr(repo_module.settings, "SUPABASE_SERVICE_ROLE_KEY", "service-role")
     monkeypatch.setattr(repo_module, "create_client", lambda *_args: Client())
 
     repo = repo_module.SupabaseRepo()
-    result = repo.insert_report({"description": "TPS penuh"})
+    result = repo.insert_report({
+        "reporter_name": "Budi",
+        "reporter_phone": "08123456789",
+        "user_id": "123",
+        "category": "tps_penuh",
+        "description": "TPS penuh sekali",
+        "latitude": -7.1,
+        "longitude": 110.1,
+        "kelurahan_id": "terban",
+        "file_ids": ["tg-file-1"],
+        "source": "telegram",
+        "metadata": {"channel": "telegram"},
+    })
 
     assert result == [{"id": "report-1", "tracking_code": "RSK-001"}]
-    assert calls[0] == ("reports", {"description": "TPS penuh"})
-    assert calls[1] == (
-        "status_history",
-        {
-            "report_id": "report-1",
-            "old_status": None,
-            "new_status": "dikirim",
-            "notes": "Laporan dibuat melalui bot Telegram",
-        },
-    )
+    assert calls["function_name"] == "create_report_intake"
+    assert calls["payload"] == {
+        "p_reporter_name": "Budi",
+        "p_reporter_phone": "08123456789",
+        "p_reporter_id": None,
+        "p_user_id": "123",
+        "p_category": "tps_penuh",
+        "p_description": "TPS penuh sekali",
+        "p_latitude": -7.1,
+        "p_longitude": 110.1,
+        "p_address": None,
+        "p_kelurahan_id": "terban",
+        "p_file_ids": ["tg-file-1"],
+        "p_photo_urls": [],
+        "p_source": "telegram",
+        "p_metadata": {"channel": "telegram"},
+        "p_status_history_notes": "Laporan dibuat melalui bot Telegram",
+    }
 
 
 def test_run_fastapi_invokes_uvicorn(monkeypatch):

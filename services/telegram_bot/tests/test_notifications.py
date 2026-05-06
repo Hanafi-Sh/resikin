@@ -198,6 +198,7 @@ async def test_notify_report_status_changed_falls_back_to_report_user_id(notific
             json={
                 "event": "status_changed",
                 "report_id": REPORT["id"],
+                "old_status": "dalam_proses",
                 "new_status": "selesai",
             },
         )
@@ -219,6 +220,7 @@ async def test_notify_report_status_changed_rejected_includes_reason(notificatio
             json={
                 "event": "status_changed",
                 "report_id": REPORT["id"],
+                "old_status": "dikirim",
                 "new_status": "ditolak",
             },
         )
@@ -242,6 +244,7 @@ async def test_notify_report_status_changed_without_telegram_id_returns_reason(n
             json={
                 "event": "status_changed",
                 "report_id": REPORT["id"],
+                "old_status": "dalam_proses",
                 "new_status": "selesai",
             },
         )

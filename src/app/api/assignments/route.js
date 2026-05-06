@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { withTelegramReportPhotos } from '@/lib/telegram-photos';
+import { withReportGallery } from '@/lib/report-gallery';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -60,7 +60,7 @@ export async function GET(request) {
 
   const assignments = (data || []).map((assignment) => ({
     ...assignment,
-    report: withTelegramReportPhotos(assignment.report),
+    report: withReportGallery(assignment.report),
   }));
 
   return NextResponse.json({ assignments });

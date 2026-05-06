@@ -11,24 +11,26 @@ class SupabaseRepo:
         self.client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
     def insert_report(self, report: dict):
-        """Insert a report dict into the `reports` table and create status history."""
-        res = self.client.table("reports").insert(report).execute()
-        # return the inserted row(s) if available
-        try:
-            inserted_data = res.data
-            if inserted_data and len(inserted_data) > 0:
-                report_id = inserted_data[0].get("id")
-                # Insert initial status history
-                self.client.table("status_history").insert({
-                    "report_id": report_id,
-                    "old_status": None,
-                    "new_status": "dikirim",
-                    "notes": "Laporan dibuat melalui bot Telegram"
-                }).execute()
-            return inserted_data
-        except Exception as e:
-            print("Error inserting status history:", e)
-            return res
+        """Create a report through the shared Laporan Intake database function."""
+        payload = {
+            "p_reporter_name": report.get("reporter_name"),
+            "p_reporter_phone": report.get("reporter_phone"),
+            "p_reporter_id": report.get("reporter_id"),
+            "p_user_id": report.get("user_id"),
+            "p_category": report.get("category"),
+            "p_description": report.get("description"),
+            "p_latitude": report.get("latitude"),
+            "p_longitude": report.get("longitude"),
+            "p_address": report.get("address"),
+            "p_kelurahan_id": report.get("kelurahan_id"),
+            "p_file_ids": report.get("file_ids") or [],
+            "p_photo_urls": report.get("photo_urls") or [],
+            "p_source": report.get("source") or "telegram",
+            "p_metadata": report.get("metadata") or {},
+            "p_status_history_notes": "Laporan dibuat melalui bot Telegram",
+        }
+        res = self.client.rpc("create_report_intake", payload).execute()
+        return res.data if hasattr(res, "data") else res
 
     def find_reporter_by_telegram_id(self, telegram_id: str) -> Optional[Dict]:
         """Find a reporter by their Telegram user ID.
