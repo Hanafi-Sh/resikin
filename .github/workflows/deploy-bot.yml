@@ -50,7 +50,9 @@ jobs:
               echo "== Sync bot runtime files =="
               rsync -a --delete \
                 --exclude venv \
+                --exclude .venv \
                 --exclude .env \
+                --exclude .env.* \
                 --exclude __pycache__ \
                 "$REPO_DIR/services/telegram_bot/" "$BOT_DIR/"
               find "$BOT_DIR" -type d -name __pycache__ -prune -exec rm -rf {} +
