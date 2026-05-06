@@ -4,9 +4,9 @@ import { cn } from '@/lib/utils';
 
 const variants = {
   primary: 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-md hover:shadow-lg',
-  secondary: 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 shadow-sm',
-  outline: 'border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50',
-  ghost: 'text-slate-600 hover:bg-slate-100',
+  secondary: 'bg-card text-secondary-foreground border border-border hover:bg-muted shadow-sm',
+  outline: 'border-2 border-emerald-600 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10',
+  ghost: 'text-secondary-foreground hover:bg-muted hover:text-foreground',
   danger: 'bg-rose-500 text-white hover:bg-rose-600 shadow-md',
   amber: 'bg-amber-500 text-white hover:bg-amber-600 shadow-md',
 };
@@ -33,7 +33,7 @@ export default function Button({
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-xl font-semibold cursor-pointer',
         'transition-all duration-200 ease-out',
-        'focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2',
+        'focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-background',
         'disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none',
         'active:scale-[0.98]',
         variants[variant],

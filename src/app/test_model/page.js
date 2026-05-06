@@ -57,18 +57,18 @@ export default function TestModelPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8">
+    <div className="min-h-screen bg-background p-8">
       <div className="max-w-3xl mx-auto space-y-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Secret AI Debugger</h1>
-          <p className="text-slate-500 mb-6">Test the Zero-Shot Image Classification model locally.</p>
+        <div className="bg-card p-6 rounded-2xl shadow-sm border border-border">
+          <h1 className="text-2xl font-bold text-foreground mb-2">Secret AI Debugger</h1>
+          <p className="text-muted-foreground mb-6">Test the Zero-Shot Image Classification model locally.</p>
           
           <div className="space-y-6">
             {/* Upload Area */}
             <div>
-              <label className="w-full h-32 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition bg-slate-50">
-                <Camera className="w-8 h-8 text-slate-400 mb-2" />
-                <span className="text-sm text-slate-500 font-medium">Klik untuk memilih gambar</span>
+              <label className="w-full h-32 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition bg-background">
+                <Camera className="w-8 h-8 text-muted-foreground mb-2" />
+                <span className="text-sm text-muted-foreground font-medium">Klik untuk memilih gambar</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -81,28 +81,28 @@ export default function TestModelPage() {
             {/* Layout for Preview and Result */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Image Preview */}
-              <div className="bg-slate-100 rounded-xl flex items-center justify-center min-h-[300px] border border-slate-200 overflow-hidden relative">
+              <div className="bg-muted rounded-xl flex items-center justify-center min-h-[300px] border border-border overflow-hidden relative">
                 {imagePreview ? (
                   <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
                 ) : (
-                  <div className="flex flex-col items-center text-slate-400">
+                  <div className="flex flex-col items-center text-muted-foreground">
                     <ImageIcon className="w-12 h-12 mb-2 opacity-50" />
                     <span className="text-sm">No image selected</span>
                   </div>
                 )}
                 
                 {loading && (
-                  <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center">
-                    <Loader2 className="w-10 h-10 animate-spin text-indigo-600 mb-3" />
-                    <span className="text-indigo-800 font-medium animate-pulse">Model is analyzing...</span>
-                    <span className="text-xs text-slate-500 mt-1">This might take a few seconds on cold start</span>
+                  <div className="absolute inset-0 bg-card/80 backdrop-blur-sm flex flex-col items-center justify-center">
+                    <Loader2 className="w-10 h-10 animate-spin text-indigo-600 dark:text-indigo-300 mb-3" />
+                    <span className="text-indigo-800 dark:text-indigo-200 font-medium animate-pulse">Model is analyzing...</span>
+                    <span className="text-xs text-muted-foreground mt-1">This might take a few seconds on cold start</span>
                   </div>
                 )}
               </div>
 
               {/* JSON Result Display */}
               <div className="bg-slate-900 rounded-xl p-4 overflow-auto max-h-[500px]">
-                <h3 className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">Model Output</h3>
+                <h3 className="text-muted-foreground text-xs font-semibold uppercase tracking-wider mb-3">Model Output</h3>
                 
                 {error && (
                   <div className="text-rose-400 text-sm p-3 bg-rose-400/10 rounded-lg">
@@ -111,7 +111,7 @@ export default function TestModelPage() {
                 )}
 
                 {!loading && !result && !error && (
-                  <div className="text-slate-500 text-sm flex items-center justify-center h-48">
+                  <div className="text-muted-foreground text-sm flex items-center justify-center h-48">
                     Waiting for input...
                   </div>
                 )}
@@ -121,7 +121,7 @@ export default function TestModelPage() {
                     {/* Summary Badge */}
                     <div className={`p-3 rounded-lg border ${result.isWaste ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/20 border-rose-500/30 text-rose-300'}`}>
                       <p className="font-semibold">{result.isWaste ? '✅ Detected as WASTE' : '❌ NOT detected as waste (SPAM)'}</p>
-                      <p className="text-sm opacity-80 mt-1">Top label: "{result.top_label}" ({(result.confidence * 100).toFixed(2)}%)</p>
+                      <p className="text-sm opacity-80 mt-1">Top label: &quot;{result.top_label}&quot; ({(result.confidence * 100).toFixed(2)}%)</p>
                       {result.suggested_category && (
                         <p className="text-sm font-medium mt-1 text-emerald-200">
                           ✨ Suggested Category: <span className="uppercase tracking-wider">{result.suggested_category}</span>
@@ -129,7 +129,7 @@ export default function TestModelPage() {
                       )}
                     </div>
 
-                    <p className="text-xs text-slate-400">Execution Time: {result.executionTimeMs} ms</p>
+                    <p className="text-xs text-muted-foreground">Execution Time: {result.executionTimeMs} ms</p>
 
                     <pre className="text-xs text-sky-300 font-mono whitespace-pre-wrap break-all">
                       {JSON.stringify(result.all_results, null, 2)}

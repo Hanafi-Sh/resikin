@@ -257,15 +257,15 @@ export default function LaporPage() {
     return (
       <div className="min-h-[80vh] flex items-center justify-center px-4 py-16">
         <Card className="max-w-lg w-full p-10 text-center animate-fade-in-up">
-          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="w-10 h-10 text-emerald-600" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Laporan Berhasil Dikirim!</h1>
-          <p className="text-slate-500 mb-6">Terima kasih. Laporan Anda akan segera diproses oleh koordinator kelurahan.</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Laporan Berhasil Dikirim!</h1>
+          <p className="text-muted-foreground mb-6">Terima kasih. Laporan Anda akan segera diproses oleh koordinator kelurahan.</p>
 
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 mb-6">
+          <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl p-5 mb-6">
             <p className="text-sm text-emerald-600 font-medium mb-1">Nomor Tracking Anda</p>
-            <p className="text-3xl font-bold text-emerald-800 font-mono tracking-wider">{trackingCode}</p>
+            <p className="text-3xl font-bold text-emerald-800 dark:text-emerald-200 font-mono tracking-wider">{trackingCode}</p>
             <p className="text-xs text-emerald-500 mt-2">Simpan nomor ini untuk melacak status laporan Anda</p>
           </div>
 
@@ -283,12 +283,12 @@ export default function LaporPage() {
   }
 
   return (
-    <div className="min-h-[80vh] bg-slate-50 py-12">
+    <div className="min-h-[80vh] bg-background py-12">
       <div className="max-w-2xl mx-auto px-4">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">Buat Laporan</h1>
-          <p className="text-slate-500 mt-2">Laporkan masalah sampah di lingkungan Anda</p>
+          <h1 className="text-3xl font-bold text-foreground">Buat Laporan</h1>
+          <p className="text-muted-foreground mt-2">Laporkan masalah sampah di lingkungan Anda</p>
         </div>
 
         {/* Step Indicator */}
@@ -302,15 +302,15 @@ export default function LaporPage() {
                     i < step
                       ? 'bg-emerald-600 text-white'
                       : i === step
-                      ? 'bg-emerald-600 text-white ring-4 ring-emerald-100'
-                      : 'bg-slate-200 text-slate-400'
+                      ? 'bg-emerald-600 text-white ring-4 ring-emerald-100 dark:ring-emerald-500/20'
+                      : 'bg-muted text-muted-foreground'
                   )}
                 >
                   {i < step ? <CheckCircle2 className="w-5 h-5" /> : i + 1}
                 </div>
                 <span className={cn(
                   'text-xs mt-1.5 font-medium',
-                  i <= step ? 'text-emerald-700' : 'text-slate-400'
+                  i <= step ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground'
                 )}>
                   {label}
                 </span>
@@ -318,7 +318,7 @@ export default function LaporPage() {
               {i < STEPS.length - 1 && (
                 <div className={cn(
                   'w-12 sm:w-20 h-0.5 mx-1 mt-[-16px]',
-                  i < step ? 'bg-emerald-500' : 'bg-slate-200'
+                  i < step ? 'bg-emerald-500' : 'bg-muted'
                 )} />
               )}
             </div>
@@ -329,17 +329,17 @@ export default function LaporPage() {
           {/* STEP 0: Detail */}
           {step === 0 && (
             <div className="space-y-5 animate-fade-in">
-              <h2 className="text-lg font-bold text-slate-900 mb-1">Detail Laporan & Foto</h2>
-              <p className="text-sm text-slate-500 mb-4">Jelaskan masalah dan tambahkan foto jika ada</p>
+              <h2 className="text-lg font-bold text-foreground mb-1">Detail Laporan & Foto</h2>
+              <p className="text-sm text-muted-foreground mb-4">Jelaskan masalah dan tambahkan foto jika ada</p>
 
               {/* Photo Upload */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                  Foto Bukti <span className="text-slate-400 font-normal">(opsional, maks {APP_CONFIG.maxPhotos})</span>
+                <label className="block text-sm font-semibold text-secondary-foreground mb-1.5">
+                  Foto Bukti <span className="text-muted-foreground font-normal">(opsional, maks {APP_CONFIG.maxPhotos})</span>
                 </label>
                 <div className="flex flex-wrap gap-3">
                   {formData.photos.map((photo, i) => (
-                    <div key={i} className="relative w-24 h-24 rounded-xl overflow-hidden border border-slate-200">
+                    <div key={i} className="relative w-24 h-24 rounded-xl overflow-hidden border border-border">
                       <img src={photo.preview} alt="" className="w-full h-full object-cover" />
                       <button
                         onClick={() => removePhoto(i)}
@@ -350,9 +350,9 @@ export default function LaporPage() {
                     </div>
                   ))}
                   {formData.photos.length < APP_CONFIG.maxPhotos && (
-                    <label className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-400 hover:bg-emerald-50 transition">
-                      <Camera className="w-6 h-6 text-slate-400" />
-                      <span className="text-xs text-slate-400 mt-1">Tambah</span>
+                    <label className="w-24 h-24 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition">
+                      <Camera className="w-6 h-6 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground mt-1">Tambah</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -365,7 +365,7 @@ export default function LaporPage() {
                 </div>
                 {/* Info Text for AI */}
                 {formData.photos.length === 0 && (
-                   <p className="text-xs text-slate-500 mt-2 flex items-center gap-1.5">
+                   <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
                      <span className="text-emerald-500">✨</span> Unggah foto agar AI Assistant dapat menyarankan kategori secara otomatis.
                    </p>
                 )}
@@ -376,7 +376,7 @@ export default function LaporPage() {
                   </div>
                 )}
                 {aiWarning && !isAnalyzing && (
-                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl flex gap-3 text-sm text-amber-800">
+                  <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl flex gap-3 text-sm text-amber-800 dark:text-amber-200">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
                     <p>{aiWarning}</p>
                   </div>
@@ -386,39 +386,39 @@ export default function LaporPage() {
 
               {/* Reporter Name */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nama Anda *</label>
+                <label className="block text-sm font-semibold text-secondary-foreground mb-1.5">Nama Anda *</label>
                 <input
                   type="text"
                   value={formData.reporter_name}
                   onChange={(e) => updateField('reporter_name', e.target.value)}
                   placeholder="Contoh: Bu Sari"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
                 />
                 {errors.reporter_name && <p className="text-xs text-rose-500 mt-1">{errors.reporter_name}</p>}
               </div>
 
               {/* Reporter Phone */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nomor HP *</label>
+                <label className="block text-sm font-semibold text-secondary-foreground mb-1.5">Nomor HP *</label>
                 <input
                   type="tel"
                   value={formData.reporter_phone}
                   onChange={(e) => updateField('reporter_phone', e.target.value)}
                   placeholder="Contoh: 08123456789"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
                 />
                 {errors.reporter_phone && <p className="text-xs text-rose-500 mt-1">{errors.reporter_phone}</p>}
               </div>
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Deskripsi Masalah *</label>
+                <label className="block text-sm font-semibold text-secondary-foreground mb-1.5">Deskripsi Masalah *</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => updateField('description', e.target.value)}
                   placeholder="Jelaskan masalah sampah yang Anda temui..."
                   rows={4}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition resize-none"
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition resize-none"
                 />
                 {errors.description && <p className="text-xs text-rose-500 mt-1">{errors.description}</p>}
               </div>
@@ -428,12 +428,12 @@ export default function LaporPage() {
           {/* STEP 1: Kategori */}
           {step === 1 && (
             <div className="animate-fade-in">
-              <h2 className="text-lg font-bold text-slate-900 mb-1">Pilih Kategori Masalah</h2>
-              <p className="text-sm text-slate-500 mb-4">Apa jenis masalah sampah yang Anda temui?</p>
+              <h2 className="text-lg font-bold text-foreground mb-1">Pilih Kategori Masalah</h2>
+              <p className="text-sm text-muted-foreground mb-4">Apa jenis masalah sampah yang Anda temui?</p>
 
               {/* Info Text for AI in Category Step */}
               {formData.photos.length > 0 && formData.category && (
-                <div className="mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-xl flex gap-3 text-sm text-indigo-700">
+                <div className="mb-4 p-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/25 rounded-xl flex gap-3 text-sm text-indigo-700 dark:text-indigo-300">
                   <span className="text-lg">🤖</span>
                   <p>AI telah menyarankan kategori berdasarkan foto Anda. Anda tetap bebas mengubahnya jika dirasa kurang sesuai.</p>
                 </div>
@@ -449,19 +449,19 @@ export default function LaporPage() {
                       className={cn(
                         'flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all duration-200',
                         formData.category === cat.value
-                          ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200'
-                          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                          ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 ring-2 ring-emerald-200 dark:ring-emerald-500/20'
+                          : 'border-border hover:border-border hover:bg-background'
                       )}
                     >
                       <div className={cn(
                         'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
-                        formData.category === cat.value ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
+                        formData.category === cat.value ? 'bg-emerald-600 text-white' : 'bg-muted text-muted-foreground'
                       )}>
                         <Icon className="w-5 h-5" />
                       </div>
                       <span className={cn(
                         'text-sm font-semibold',
-                        formData.category === cat.value ? 'text-emerald-800' : 'text-slate-700'
+                        formData.category === cat.value ? 'text-emerald-800 dark:text-emerald-200' : 'text-secondary-foreground'
                       )}>
                         {cat.label}
                       </span>
@@ -478,15 +478,15 @@ export default function LaporPage() {
           {/* STEP 2: Lokasi */}
           {step === 2 && (
             <div className="space-y-5 animate-fade-in">
-              <h2 className="text-lg font-bold text-slate-900 mb-1">Lokasi Masalah</h2>
-              <p className="text-sm text-slate-500 mb-4">Tentukan lokasi masalah sampah</p>
+              <h2 className="text-lg font-bold text-foreground mb-1">Lokasi Masalah</h2>
+              <p className="text-sm text-muted-foreground mb-4">Tentukan lokasi masalah sampah</p>
 
               {formData.latitude && formData.longitude ? (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5">
+                <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl p-5">
                   <div className="flex items-start gap-3">
                     <MapPin className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-semibold text-emerald-800 mb-1">Lokasi Terdeteksi</p>
+                      <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200 mb-1">Lokasi Terdeteksi</p>
                       <p className="text-sm text-emerald-600">{formData.address}</p>
                       <p className="text-xs text-emerald-500 mt-1">
                         {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
@@ -504,10 +504,10 @@ export default function LaporPage() {
                 </div>
               ) : (
                 <div className="text-center py-10">
-                  <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <MapPin className="w-8 h-8 text-slate-400" />
+                  <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <MapPin className="w-8 h-8 text-muted-foreground" />
                   </div>
-                  <p className="text-slate-500 text-sm mb-4">
+                  <p className="text-muted-foreground text-sm mb-4">
                     Izinkan akses lokasi untuk menentukan posisi masalah sampah
                   </p>
                   <Button onClick={detectLocation} loading={loading}>
@@ -522,7 +522,7 @@ export default function LaporPage() {
 
               {/* Manual Address Input */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                <label className="block text-sm font-semibold text-secondary-foreground mb-1.5">
                   Atau tulis alamat manual
                 </label>
                 <input
@@ -530,7 +530,7 @@ export default function LaporPage() {
                   value={formData.address}
                   onChange={(e) => updateField('address', e.target.value)}
                   placeholder="Contoh: Jl. Kaliurang KM 5, depan warung Bu Sari"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
                 />
               </div>
             </div>
@@ -539,31 +539,31 @@ export default function LaporPage() {
           {/* STEP 3: Review & Kirim */}
           {step === 3 && (
             <div className="space-y-5 animate-fade-in">
-              <h2 className="text-lg font-bold text-slate-900 mb-1">Periksa Laporan</h2>
-              <p className="text-sm text-slate-500 mb-4">Pastikan semua informasi sudah benar sebelum dikirim</p>
+              <h2 className="text-lg font-bold text-foreground mb-1">Periksa Laporan</h2>
+              <p className="text-sm text-muted-foreground mb-4">Pastikan semua informasi sudah benar sebelum dikirim</p>
 
               <div className="space-y-4">
-                <div className="bg-slate-100 rounded-xl p-4">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Kategori</p>
-                  <p className="text-sm font-semibold text-slate-900">
+                <div className="bg-muted rounded-xl p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Kategori</p>
+                  <p className="text-sm font-semibold text-foreground">
                     {REPORT_CATEGORIES.find(c => c.value === formData.category)?.label}
                   </p>
                 </div>
 
-                <div className="bg-slate-100 rounded-xl p-4">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Pelapor</p>
-                  <p className="text-sm font-semibold text-slate-900">{formData.reporter_name}</p>
-                  <p className="text-sm text-slate-600">{formData.reporter_phone}</p>
+                <div className="bg-muted rounded-xl p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Pelapor</p>
+                  <p className="text-sm font-semibold text-foreground">{formData.reporter_name}</p>
+                  <p className="text-sm text-secondary-foreground">{formData.reporter_phone}</p>
                 </div>
 
-                <div className="bg-slate-100 rounded-xl p-4">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Deskripsi</p>
-                  <p className="text-sm text-slate-700">{formData.description}</p>
+                <div className="bg-muted rounded-xl p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Deskripsi</p>
+                  <p className="text-sm text-secondary-foreground">{formData.description}</p>
                 </div>
 
                 {formData.photos.length > 0 && (
-                  <div className="bg-slate-100 rounded-xl p-4">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Foto ({formData.photos.length})</p>
+                  <div className="bg-muted rounded-xl p-4">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Foto ({formData.photos.length})</p>
                     <div className="flex gap-2">
                       {formData.photos.map((photo, i) => (
                         <div key={i} className="w-16 h-16 rounded-lg overflow-hidden">
@@ -575,15 +575,15 @@ export default function LaporPage() {
                 )}
 
                 {formData.address && (
-                  <div className="bg-slate-100 rounded-xl p-4">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Lokasi</p>
-                    <p className="text-sm text-slate-700">{formData.address}</p>
+                  <div className="bg-muted rounded-xl p-4">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Lokasi</p>
+                    <p className="text-sm text-secondary-foreground">{formData.address}</p>
                   </div>
                 )}
               </div>
 
               {errors.submit && (
-                <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-700">
+                <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-xl p-4 text-sm text-rose-700 dark:text-rose-300">
                   {errors.submit}
                 </div>
               )}
@@ -591,7 +591,7 @@ export default function LaporPage() {
           )}
 
           {/* Navigation Buttons */}
-          <div className="flex justify-between mt-8 pt-6 border-t border-slate-100">
+          <div className="flex justify-between mt-8 pt-6 border-t border-border">
             {step > 0 ? (
               <Button variant="ghost" onClick={prevStep}>
                 <ArrowLeft className="w-4 h-4" />

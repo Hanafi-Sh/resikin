@@ -143,7 +143,7 @@ export default function HomePage() {
                     </div>
                   ))}
                 </div>
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-muted-foreground">
                   <span className="text-emerald-400 font-semibold">3,500+</span> warga sudah melapor
                 </p>
               </div>
@@ -164,7 +164,7 @@ export default function HomePage() {
                         <p className="text-white font-semibold text-sm">Dashboard Hari Ini</p>
                           {(() => {
                             const today = new Date().toLocaleDateString();
-                            return <p  className="text-slate-400 text-xs">{today}</p>;
+                            return <p  className="text-muted-foreground text-xs">{today}</p>;
                           })()}
                       </div>
                     </div>
@@ -182,7 +182,7 @@ export default function HomePage() {
                     ].map((stat) => (
                       <div key={stat.label} className="bg-white/5 rounded-xl p-3 text-center">
                         <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-                        <p className="text-xs text-slate-400 mt-1">{stat.label}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
                       </div>
                     ))}
                   </div>
@@ -197,7 +197,7 @@ export default function HomePage() {
                       <div key={i} className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-3">
                         <div>
                           <p className="text-white text-sm font-medium">{item.cat}</p>
-                          <p className="text-slate-400 text-xs">{item.area}</p>
+                          <p className="text-muted-foreground text-xs">{item.area}</p>
                         </div>
                         <span className={`text-xs font-medium ${item.statusColor}`}>{item.status}</span>
                       </div>
@@ -229,13 +229,13 @@ export default function HomePage() {
               return (
                 <div
                   key={stat.label}
-                  className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 p-5 text-center hover:shadow-xl transition-shadow duration-300"
+                  className="bg-card rounded-2xl shadow-lg shadow-slate-200/50 border border-border p-5 text-center hover:shadow-xl transition-shadow duration-300"
                 >
-                  <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
                     <Icon className="w-5 h-5 text-emerald-600" />
                   </div>
-                  <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
-                  <p className="text-xs text-slate-500 mt-1">{stat.label}</p>
+                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
                 </div>
               );
             })}
@@ -246,16 +246,16 @@ export default function HomePage() {
       {/* ============================================
           HOW IT WORKS
           ============================================ */}
-      <section className="py-24 bg-white" id="cara-kerja">
+      <section className="py-24 bg-card" id="cara-kerja">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <span className="text-lg font-semibold text-emerald-600 uppercase tracking-wider">
               Cara Kerja
             </span>
-            <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-slate-900">
+            <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-foreground">
               Semudah <span className="text-gradient">3 Langkah</span>
             </h2>
-            <p className="mt-4 text-lg text-slate-500 max-w-2xl mx-auto">
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
               Tidak perlu download aplikasi. Tidak perlu membuat akun. Langsung laporkan dari browser Anda.
             </p>
           </div>
@@ -267,12 +267,12 @@ export default function HomePage() {
                 <div key={item.step} className="relative group">
                   {/* Connector line */}
                   {i < steps.length - 1 && (
-                    <div className="md:block absolute -bottom-5 left-[40%] md:top-12 md:left-[60%] w-[20%] md:w-[80%] md:rotate-0 rotate-90 h-0.5 bg-slate-200">
-                      <div className="absolute right-0 -top-1 w-1 h-1 border-r-2 border-t-2 border-slate-300 rotate-45" />
+                    <div className="md:block absolute -bottom-5 left-[40%] md:top-12 md:left-[60%] w-[20%] md:w-[80%] md:rotate-0 rotate-90 h-0.5 bg-muted">
+                      <div className="absolute right-0 -top-1 w-1 h-1 border-r-2 border-t-2 border-border rotate-45" />
                     </div>
                   )}
 
-                  <Card hover className="text-center p-8 relative overflow-hidden group-hover:border-emerald-200 transition-colors">
+                  <Card hover className="text-center p-8 relative overflow-hidden group-hover:border-emerald-200 dark:border-emerald-500/30 transition-colors">
                     {/* Step number watermark */}
                     <span className="absolute top-4 left-6 text-3xl font-black text-black select-none">
                       {item.step}
@@ -282,8 +282,8 @@ export default function HomePage() {
                       <Icon className="w-7 h-7 text-white" />
                     </div>
 
-                    <h3 className="text-xl font-bold text-slate-900 mb-3 relative z-10">{item.title}</h3>
-                    <p className="text-slate-500 text-sm leading-relaxed relative z-10">{item.description}</p>
+                    <h3 className="text-xl font-bold text-foreground mb-3 relative z-10">{item.title}</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed relative z-10">{item.description}</p>
                   </Card>
                 </div>
               );
@@ -295,16 +295,16 @@ export default function HomePage() {
       {/* ============================================
           FEATURES
           ============================================ */}
-      <section className="py-24 bg-slate-50" id="fitur">
+      <section className="py-24 bg-background" id="fitur">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <span className="text-lg font-semibold text-emerald-600 uppercase tracking-wider">
               Fitur Unggulan
             </span>
-            <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-slate-900">
+            <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-foreground">
               Kenapa Pakai <span className="text-gradient">ResikIn</span>?
             </h2>
-            <p className="mt-4 text-lg text-slate-500 max-w-2xl mx-auto">
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
               Didesain khusus untuk kebutuhan koordinasi sampah di level kelurahan.
             </p>
           </div>
@@ -314,7 +314,7 @@ export default function HomePage() {
               const Icon = feature.icon;
               return (
                 <Card key={feature.title} hover className="p-6 flex gap-5 bg-gradient-emerald">
-                  <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
+                  <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl flex items-center justify-center shrink-0">
                     <Icon className="w-6 h-6 text-emerald-600" />
                   </div>
                   <div>
@@ -350,7 +350,7 @@ export default function HomePage() {
                   <Button
                     variant="secondary"
                     size="xl"
-                    className="bg-white text-emerald-700 hover:bg-emerald-50 shadow-xl"
+                    className="bg-card text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 shadow-xl"
                   >
                     Buat Laporan
                     <ArrowRight className="w-5 h-5" />

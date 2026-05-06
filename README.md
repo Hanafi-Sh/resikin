@@ -47,6 +47,8 @@ Sistem ini terdiri dari **dua komponen utama**:
 | AI Proxy | Next.js API Routes ke AI microservice |
 | Deploy | Vercel |
 
+Theme web memakai CSS variables di `src/app/globals.css`. Dark mode berlaku global, mengikuti `prefers-color-scheme` saat kunjungan pertama, lalu menyimpan pilihan eksplisit pengguna di `localStorage` melalui toggle di navbar.
+
 ### Telegram Bot
 
 | Layer | Teknologi |
@@ -154,7 +156,8 @@ resikin/
 │   │   └── api/                # API Routes
 │   ├── components/             # Komponen reusable
 │   │   ├── ui/                 # Button, Card, Badge, dll.
-│   │   └── layout/             # Navbar, Footer
+│   │   ├── layout/             # Navbar, Footer
+│   │   └── theme/              # ThemeProvider dan dark mode toggle
 │   └── lib/                    # Utilities & config
 │       ├── supabase/           # Supabase clients
 │       ├── constants.js        # Enums & constants
