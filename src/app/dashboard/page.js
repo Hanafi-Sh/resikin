@@ -15,11 +15,11 @@ import { REPORT_STATUS, REPORT_CATEGORY_LABELS } from '@/lib/constants';
 import TelegramLinkCard from '@/components/ui/TelegramLinkCard';
 
 const STAT_CARDS = [
-  { key: 'dikirim', label: 'Laporan Baru', icon: Inbox, color: 'text-sky-600', bg: 'bg-sky-50', ring: 'ring-sky-200' },
-  { key: 'dalam_proses', label: 'Sedang Proses', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', ring: 'ring-amber-200' },
-  { key: 'selesai', label: 'Selesai', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', ring: 'ring-emerald-200' },
-  { key: 'ditolak', label: 'Ditolak', icon: AlertCircle, color: 'text-rose-600', bg: 'bg-rose-50', ring: 'ring-rose-200' },
-  { key: 'total', label: 'Total Laporan', icon: FileText, color: 'text-slate-600', bg: 'bg-slate-50', ring: 'ring-slate-200' },
+  { key: 'dikirim', label: 'Laporan Baru', icon: Inbox, color: 'text-sky-600 dark:text-sky-300', bg: 'bg-sky-50 dark:bg-sky-500/10', ring: 'ring-sky-200' },
+  { key: 'dalam_proses', label: 'Sedang Proses', icon: Clock, color: 'text-amber-600 dark:text-amber-300', bg: 'bg-amber-50 dark:bg-amber-500/10', ring: 'ring-amber-200' },
+  { key: 'selesai', label: 'Selesai', icon: CheckCircle2, color: 'text-emerald-600 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-500/10', ring: 'ring-emerald-200' },
+  { key: 'ditolak', label: 'Ditolak', icon: AlertCircle, color: 'text-rose-600 dark:text-rose-300', bg: 'bg-rose-50 dark:bg-rose-500/10', ring: 'ring-rose-200' },
+  { key: 'total', label: 'Total Laporan', icon: FileText, color: 'text-secondary-foreground', bg: 'bg-background', ring: 'ring-border' },
 ];
 
 const STATUS_FILTERS = [
@@ -72,18 +72,21 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    // Existing dashboard fetch pattern intentionally stays client-side for this UI-only change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
   return (
-    <div className="min-h-[80vh] bg-slate-50">
+    <div className="min-h-[80vh] bg-background">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200">
+      <div className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Dashboard Koordinator</h1>
-              <p className="text-sm text-slate-500 mt-1">Kelola laporan masalah sampah kelurahan</p>
+              <h1 className="text-2xl font-bold text-foreground">Dashboard Koordinator</h1>
+              <p className="text-sm text-muted-foreground mt-1">Kelola laporan masalah sampah kelurahan</p>
             </div>
             <Button variant="secondary" size="sm" onClick={fetchReports}>
               <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
@@ -108,8 +111,8 @@ export default function DashboardPage() {
               <Card key={stat.key} className="p-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{stat.label}</p>
-                    <p className="text-3xl font-bold text-slate-900 mt-1">{value}</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
+                    <p className="text-3xl font-bold text-foreground mt-1">{value}</p>
                   </div>
                   <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center', stat.bg)}>
                     <Icon className={cn('w-6 h-6', stat.color)} />
@@ -123,8 +126,8 @@ export default function DashboardPage() {
         {/* Filter + Table */}
         <Card className="overflow-hidden">
           {/* Filter Bar */}
-          <div className="p-4 border-b border-slate-100 flex items-center gap-2 overflow-x-auto">
-            <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+          <div className="p-4 border-b border-border flex items-center gap-2 overflow-x-auto">
+            <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
             {STATUS_FILTERS.map((f) => (
               <button
                 key={f.value}
@@ -133,7 +136,7 @@ export default function DashboardPage() {
                   'px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all',
                   statusFilter === f.value
                     ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    : 'bg-muted text-secondary-foreground hover:bg-muted'
                 )}
               >
                 {f.label}
@@ -145,48 +148,48 @@ export default function DashboardPage() {
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
-              <span className="ml-2 text-sm text-slate-500">Memuat laporan...</span>
+              <span className="ml-2 text-sm text-muted-foreground">Memuat laporan...</span>
             </div>
           ) : reports.length === 0 ? (
             <div className="text-center py-20">
               <Inbox className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500 font-medium">Belum ada laporan</p>
-              <p className="text-sm text-slate-400 mt-1">Laporan dari warga akan muncul di sini</p>
+              <p className="text-muted-foreground font-medium">Belum ada laporan</p>
+              <p className="text-sm text-muted-foreground mt-1">Laporan dari warga akan muncul di sini</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-slate-50 text-left">
-                    <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Kode</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Kategori</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Deskripsi</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Waktu</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                  <tr className="bg-background text-left">
+                    <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Kode</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Kategori</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden md:table-cell">Deskripsi</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Waktu</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-border">
                   {reports.map((report) => (
                     <tr
                       key={report.id}
-                      className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                      className="hover:bg-background transition-colors cursor-pointer group"
                       onClick={() => router.push(`/dashboard/laporan/${report.id}`)}
                     >
                       <td className="px-5 py-4">
-                        <span className="text-sm font-mono font-semibold text-emerald-700">{report.tracking_code}</span>
+                        <span className="text-sm font-mono font-semibold text-emerald-700 dark:text-emerald-300">{report.tracking_code}</span>
                       </td>
                       <td className="px-5 py-4">
-                        <span className="text-sm text-slate-700">{REPORT_CATEGORY_LABELS[report.category] || report.category}</span>
+                        <span className="text-sm text-secondary-foreground">{REPORT_CATEGORY_LABELS[report.category] || report.category}</span>
                       </td>
                       <td className="px-5 py-4 hidden md:table-cell">
-                        <span className="text-sm text-slate-500">{truncate(report.description, 60)}</span>
+                        <span className="text-sm text-muted-foreground">{truncate(report.description, 60)}</span>
                       </td>
                       <td className="px-5 py-4">
                         <StatusBadge status={report.status} size="sm" />
                       </td>
                       <td className="px-5 py-4 hidden sm:table-cell">
-                        <span className="text-xs text-slate-400">{getRelativeTime(report.created_at)}</span>
+                        <span className="text-xs text-muted-foreground">{getRelativeTime(report.created_at)}</span>
                       </td>
                       <td className="px-5 py-4">
                         <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />

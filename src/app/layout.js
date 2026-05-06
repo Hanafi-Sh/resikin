@@ -1,8 +1,11 @@
 import { Geist, Geist_Mono } from "next/font/google";
+import { cookies } from "next/headers";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { THEME_COOKIE_NAME, isTheme } from "@/lib/theme.mjs";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,20 +44,55 @@ export const viewport = {
   themeColor: "#059669",
 };
 
-export default function RootLayout({ children }) {
+const themeScript = `
+(() => {
+  try {
+    const storageKey = 'resikin-theme';
+    const cookieTheme = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith(storageKey + '='))
+      ?.split('=')[1];
+    const storedTheme = window.localStorage.getItem(storageKey);
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    const theme = storedTheme === 'light' || storedTheme === 'dark'
+      ? storedTheme
+      : cookieTheme === 'light' || cookieTheme === 'dark'
+        ? cookieTheme
+        : systemTheme;
+    window.localStorage.setItem(storageKey, theme);
+    document.cookie = storageKey + '=' + theme + '; Path=/; Max-Age=31536000; SameSite=Lax';
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(theme);
+    document.documentElement.dataset.theme = theme;
+  } catch (_) {
+    document.documentElement.classList.add('light');
+    document.documentElement.dataset.theme = 'light';
+  }
+})();
+`;
+
+export default async function RootLayout({ children }) {
+  const themeCookie = (await cookies()).get(THEME_COOKIE_NAME)?.value;
+  const initialTheme = isTheme(themeCookie) ? themeCookie : "light";
+
   return (
     <html
       lang="id"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased ${initialTheme}`}
+      data-theme={initialTheme}
+      suppressHydrationWarning
     >
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
       <body className="min-h-full flex flex-col">
-        <Navbar />
-        <main className="flex-1 pb-16 md:pb-0">{children}</main>
-        <Footer />
-        <MobileBottomNav />
+        <ThemeProvider>
+          <Navbar />
+          <main className="flex-1 pb-16 md:pb-0">{children}</main>
+          <Footer />
+          <MobileBottomNav />
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -24,7 +24,7 @@ export default function ReportPhotoGallery({
     <>
       <div className={className}>
         {title && (
-          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">
+          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider mb-3">
             <ImageIcon className="w-4 h-4 inline mr-1.5" />
             {title}
           </h2>
@@ -35,7 +35,7 @@ export default function ReportPhotoGallery({
               key={photo.id || photo.file_id || photo.photo_url}
               type="button"
               onClick={() => setSelectedPhoto(photo)}
-              className="group relative block overflow-hidden rounded-lg border border-slate-200 bg-slate-100 aspect-[4/3] text-left transition hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+              className="group relative block overflow-hidden rounded-lg border border-border bg-muted aspect-[4/3] text-left transition hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-background"
               aria-label={`Perbesar foto laporan ${index + 1}`}
             >
               <img
@@ -62,7 +62,7 @@ export default function ReportPhotoGallery({
           <button
             type="button"
             onClick={() => setSelectedPhoto(null)}
-            className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow-lg transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-card/95 text-secondary-foreground shadow-lg transition hover:bg-card focus:outline-none focus:ring-2 focus:ring-emerald-500"
             aria-label="Tutup pratinjau foto"
           >
             <X className="h-5 w-5" />

@@ -90,19 +90,19 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
   const currentStatusIndex = report ? getStatusIndex(report.status) : -1;
 
   return (
-    <div className="min-h-[80vh] bg-slate-50 py-12">
+    <div className="min-h-[80vh] bg-background py-12">
       <div className="max-w-2xl mx-auto px-4">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">Lacak Laporan</h1>
-          <p className="text-slate-500 mt-2">Masukkan nomor tracking untuk melihat status laporan Anda</p>
+          <h1 className="text-3xl font-bold text-foreground">Lacak Laporan</h1>
+          <p className="text-muted-foreground mt-2">Masukkan nomor tracking untuk melihat status laporan Anda</p>
         </div>
 
         {/* Search Box */}
         <Card className="p-6 mb-8">
           <div className="flex gap-3">
             <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
                 type="text"
                 value={code}
@@ -112,7 +112,7 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 placeholder="Contoh: RSK-20260423-001"
-                className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-slate-200 text-sm font-mono tracking-wider focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-border text-sm font-mono tracking-wider focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
               />
             </div>
             <Button onClick={() => handleSearch()} loading={loading} className="shrink-0">
@@ -132,7 +132,7 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
                 setSearched(false);
                 setCode('');
               }}
-              className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-emerald-600 transition-colors mb-2"
+              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-emerald-600 transition-colors mb-2"
             >
               <ArrowLeft className="w-4 h-4" />
               Kembali ke Daftar Laporan
@@ -142,17 +142,17 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
             <Card className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <p className="text-xs text-slate-500 font-mono">{report.tracking_code}</p>
-                  <h2 className="text-lg font-bold text-slate-900 mt-1">
+                  <p className="text-xs text-muted-foreground font-mono">{report.tracking_code}</p>
+                  <h2 className="text-lg font-bold text-foreground mt-1">
                     {REPORT_CATEGORY_LABELS[report.category] || report.category}
                   </h2>
-                  <p className="text-sm text-slate-500 mt-1">{report.description}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{report.description}</p>
                 </div>
                 <StatusBadge status={report.status} size="lg" />
               </div>
 
               {report.address && (
-                <div className="text-sm text-slate-500 flex items-start gap-2 mt-3 pt-3 border-t border-slate-100">
+                <div className="text-sm text-muted-foreground flex items-start gap-2 mt-3 pt-3 border-t border-border">
                   <span className="shrink-0">📍</span>
                   <span>{report.address}</span>
                 </div>
@@ -160,7 +160,7 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
 
               {/* Report Photos */}
               {report.report_photos?.filter(p => p.type === 'report').length > 0 && (
-                <div className="mt-4 pt-4 border-t border-slate-100">
+                <div className="mt-4 pt-4 border-t border-border">
                   <ReportPhotoGallery
                     photos={report.report_photos.filter(p => p.type === 'report')}
                     size="md"
@@ -171,7 +171,7 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
 
             {/* Status Timeline */}
             <Card className="p-6">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider mb-6">
                 Timeline Status
               </h3>
 
@@ -190,17 +190,17 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
                           <div className={cn(
                             'w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all',
                             isCurrent
-                              ? 'bg-emerald-600 text-white ring-4 ring-emerald-100'
+                              ? 'bg-emerald-600 text-white ring-4 ring-emerald-100 dark:ring-emerald-500/20'
                               : isActive
                               ? 'bg-emerald-600 text-white'
-                              : 'bg-slate-200 text-slate-400'
+                              : 'bg-muted text-muted-foreground'
                           )}>
                             <Icon className="w-5 h-5" />
                           </div>
                           {i < STATUS_ORDER.length - 1 && (
                             <div className={cn(
                               'w-0.5 h-12 my-1',
-                              i < currentStatusIndex ? 'bg-emerald-400' : 'bg-slate-200'
+                              i < currentStatusIndex ? 'bg-emerald-400' : 'bg-muted'
                             )} />
                           )}
                         </div>
@@ -209,17 +209,17 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
                         <div className={cn('pb-8', i === STATUS_ORDER.length - 1 && 'pb-0')}>
                           <p className={cn(
                             'text-sm font-bold',
-                            isActive ? 'text-slate-900' : 'text-slate-400'
+                            isActive ? 'text-foreground' : 'text-muted-foreground'
                           )}>
                             {REPORT_STATUS_LABELS[status]}
                           </p>
                           {historyEntry && (
-                            <p className="text-xs text-slate-500 mt-0.5">
+                            <p className="text-xs text-muted-foreground mt-0.5">
                               {formatDateTime(historyEntry.changed_at)}
                             </p>
                           )}
                           {historyEntry?.notes && (
-                            <p className="text-xs text-slate-400 mt-0.5 italic">{historyEntry.notes}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5 italic">{historyEntry.notes}</p>
                           )}
                         </div>
                       </div>
@@ -228,15 +228,15 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
                 </div>
               ) : (
                 /* Rejected State */
-                <div className="bg-rose-50 border border-rose-200 rounded-xl p-5">
+                <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-xl p-5">
                   <div className="flex items-start gap-3">
                     <XCircle className="w-6 h-6 text-rose-500 shrink-0" />
                     <div>
-                      <p className="text-sm font-bold text-rose-800">Laporan Ditolak</p>
+                      <p className="text-sm font-bold text-rose-800 dark:text-rose-200">Laporan Ditolak</p>
                       {report.reject_reason && (
-                        <p className="text-sm text-rose-600 mt-1">Alasan: {report.reject_reason}</p>
+                        <p className="text-sm text-rose-600 dark:text-rose-300 mt-1">Alasan: {report.reject_reason}</p>
                       )}
-                      <p className="text-xs text-rose-400 mt-2">
+                      <p className="text-xs text-rose-400 dark:text-rose-300/80 mt-2">
                         Jika Anda merasa ini keliru, silakan buat laporan baru dengan informasi yang lebih lengkap.
                       </p>
                     </div>
@@ -262,7 +262,7 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
         {searched && !report && !loading && !error && (
           <Card className="p-10 text-center">
             <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500">Laporan tidak ditemukan</p>
+            <p className="text-muted-foreground">Laporan tidak ditemukan</p>
           </Card>
         )}
 
@@ -271,8 +271,8 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
           <div className="mt-12 animate-fade-in-up">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Laporan Terbaru</h2>
-                <p className="text-sm text-slate-500">Transparansi penanganan sampah di kelurahan kita</p>
+                <h2 className="text-lg font-bold text-foreground">Laporan Terbaru</h2>
+                <p className="text-sm text-muted-foreground">Transparansi penanganan sampah di kelurahan kita</p>
               </div>
             </div>
 
@@ -280,10 +280,10 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
               <div className="space-y-4">
                 {[1, 2, 3].map(i => (
                   <Card key={i} className="p-5 animate-pulse flex gap-4">
-                    <div className="w-12 h-12 bg-slate-200 rounded-xl shrink-0" />
+                    <div className="w-12 h-12 bg-muted rounded-xl shrink-0" />
                     <div className="flex-1 space-y-3 py-1">
-                      <div className="h-4 bg-slate-200 rounded w-1/3" />
-                      <div className="h-3 bg-slate-200 rounded w-2/3" />
+                      <div className="h-4 bg-muted rounded w-1/3" />
+                      <div className="h-3 bg-muted rounded w-2/3" />
                     </div>
                   </Card>
                 ))}
@@ -294,7 +294,7 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
                   <Card 
                     key={item.id} 
                     hover 
-                    className="p-5 cursor-pointer transition-all hover:border-emerald-200 group"
+                    className="p-5 cursor-pointer transition-all hover:border-emerald-200 dark:hover:border-emerald-500/30 group"
                     onClick={() => {
                       setCode(item.tracking_code);
                       handleSearch(item.tracking_code);
@@ -303,19 +303,19 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mb-1.5">
-                          <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md shrink-0">
+                          <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded-md shrink-0">
                             {item.tracking_code}
                           </span>
-                          <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
                             {formatDateTime(item.created_at)}
                           </span>
                         </div>
-                        <h3 className="font-semibold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                        <h3 className="font-semibold text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
                           {REPORT_CATEGORY_LABELS[item.category] || item.category}
                         </h3>
-                        <p className="text-sm text-slate-500 mt-1 line-clamp-1">{item.description}</p>
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-1">{item.description}</p>
                         {item.address && (
-                          <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-400">
+                          <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
                             <span className="shrink-0">📍</span>
                             <span className="truncate">{item.address}</span>
                           </div>
@@ -330,7 +330,7 @@ export default function TrackingClient({ initialCode = '', initialReport = null,
                 ))}
               </div>
             ) : (
-              <Card className="p-8 text-center text-slate-500">
+              <Card className="p-8 text-center text-muted-foreground">
                 <Leaf className="w-8 h-8 mx-auto text-emerald-200 mb-2" />
                 <p>Belum ada laporan terbaru.</p>
               </Card>
