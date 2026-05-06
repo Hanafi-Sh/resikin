@@ -65,6 +65,30 @@ jobs:
             echo "== Run VPS deploy script =="
             /home/ubuntu/deploy-resikin-bot.sh
 
+            echo "== Show systemd unit =="
+            systemctl cat resikin-bot.service || true
+            systemctl show -p WorkingDirectory resikin-bot.service || true
+
+            echo "== Validate .env and token =="
+            if [ ! -f "$BOT_DIR/.env" ]; then
+              echo "Missing $BOT_DIR/.env"
+              exit 1
+            fi
+            TELEGRAM_BOT_TOKEN="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$BOT_DIR/.env" | head -n1 | cut -d= -f2-)"
+            if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
+              echo "TELEGRAM_BOT_TOKEN is empty"
+              exit 1
+            fi
+
+            echo "== Clear webhook (ensure long-poll works) =="
+            curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook?drop_pending_updates=true" >/dev/null
+
+            echo "== Restart bot and show logs =="
+            systemctl restart resikin-bot.service
+            sleep 2
+            systemctl status resikin-bot.service --no-pager || true
+            journalctl -u resikin-bot.service -n 200 --no-pager || true
+
             echo "== Verify runtime DeepSeek removal =="
             cd "$BOT_DIR"
             if grep -R -E "DEEPSEEK|AsyncOpenAI|call_deepseek|from openai|import openai" -n app domain repositories requirements.txt run_bot.py; then
