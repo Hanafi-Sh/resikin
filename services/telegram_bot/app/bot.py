@@ -10,12 +10,10 @@ from domain.models import Report, Reporter
 import asyncio
 import logging
 import hashlib
-import json
 import base64
 import aiohttp
 import re
 import time
-from contextlib import suppress
 from datetime import datetime, timezone
 from app.kelurahan import KELURAHAN_OPTIONS, get_kelurahan_name
 from domain.report_draft import (
@@ -27,16 +25,12 @@ from domain.report_draft import (
     get_category_name,
     is_photo_decline_text,
     mark_photo_asked_from_text,
-    merge_ai_data,
     missing_field_prompt,
     normalize_category,
-    normalize_kelurahan,
     normalize_lookup_key,
     user_state,
-    validate_report_readiness,
 )
 from typing import TYPE_CHECKING, Dict, List, Any, Optional
-from openai import AsyncOpenAI
 
 if TYPE_CHECKING:
     from repositories.supabase_repo import SupabaseRepo
@@ -50,14 +44,6 @@ dp.include_router(router)
 
 _repo = None
 _bot = None
-
-deepseek_client = AsyncOpenAI(
-    api_key=settings.DEEPSEEK_API_KEY,
-    base_url="https://api.deepseek.com/v1"
-)
-
-# ── Anti Spam & LLM Memory ──
-chat_history: Dict[int, List[dict]] = {}
 
 MAIN_MENU_REPORT_TEXT = "📝 Saya mau lapor"
 MAIN_MENU_MESSAGE = (
@@ -94,7 +80,7 @@ def is_report_button_text(text: Optional[str]) -> bool:
 
 
 def has_active_report_memory(user_id: int) -> bool:
-    return user_id in chat_history or user_id in user_state
+    return user_id in user_state
 
 
 async def answer_idle_report_prompt(message: Message):
@@ -111,47 +97,18 @@ def is_entrypoint_message(event: TelegramObject) -> bool:
     return text.startswith("/start") or is_report_button_text(text)
 
 
-async def keep_chat_action(chat_id: int, action: str, interval: float = 4.0):
-    bot = get_bot()
-    while True:
-        await asyncio.sleep(interval)
-        try:
-            await bot.send_chat_action(chat_id=chat_id, action=action)
-        except Exception:
-            logger.debug("Failed to send Telegram chat action", exc_info=True)
-
-
-async def run_with_chat_action(chat_id: int, action: str, awaitable):
-    try:
-        await get_bot().send_chat_action(chat_id=chat_id, action=action)
-    except Exception:
-        logger.debug("Failed to send initial Telegram chat action", exc_info=True)
-
-    action_task = asyncio.create_task(keep_chat_action(chat_id, action))
-    try:
-        return await awaitable
-    finally:
-        action_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await action_task
-
 class AntiSpamMiddleware(BaseMiddleware):
     def __init__(self):
         super().__init__()
         self.last_msg_time = {}
-        self.daily_stats = {}
         self.max_chars_per_msg = 2000
-        self.max_chars_per_day = 50000
-        self.max_chats_per_day = 100
 
     async def __call__(self, handler, event: TelegramObject, data: Dict[str, Any]):
         if getattr(event, "from_user", None) is None:
             return await handler(event, data)
         
         user_id = event.from_user.id
-        now = datetime.now(timezone.utc)
-        now_ts = now.timestamp()
-        today = now.strftime("%Y-%m-%d")
+        now_ts = datetime.now(timezone.utc).timestamp()
 
         is_entrypoint = is_entrypoint_message(event)
 
@@ -164,10 +121,6 @@ class AntiSpamMiddleware(BaseMiddleware):
         if not is_entrypoint:
             self.last_msg_time[user_id] = now_ts
 
-        # 2. Daily limits
-        if user_id not in self.daily_stats or self.daily_stats[user_id]["date"] != today:
-            self.daily_stats[user_id] = {"date": today, "chats": 0, "chars": 0}
-
         text_length = 0
         if isinstance(event, Message):
             if event.text: text_length += len(event.text)
@@ -177,62 +130,26 @@ class AntiSpamMiddleware(BaseMiddleware):
                 await event.answer("⚠️ Pesan terlalu panjang (Maks 2000 karakter).")
                 return
 
-        # Check if FSM is active. If active, we don't count towards LLM limits.
-        state: FSMContext = data.get("state")
-        current_state = await state.get_state() if state else None
-        
-        # We only apply LLM rate limits if NOT in FSM (LLM mode)
-        if current_state is None and isinstance(event, Message) and (event.text or event.photo) and not (event.text and event.text.startswith('/')):
-            if self.daily_stats[user_id]["chats"] >= self.max_chats_per_day:
-                await event.answer("⚠️ Anda telah mencapai batas obrolan AI harian (100 chat). Mengalihkan ke mode manual...")
-                await _force_fallback(event, state)
-                return
-
-            if self.daily_stats[user_id]["chars"] + text_length > self.max_chars_per_day:
-                await event.answer("⚠️ Anda telah mencapai batas karakter AI harian. Mengalihkan ke mode manual...")
-                await _force_fallback(event, state)
-                return
-
-            self.daily_stats[user_id]["chats"] += 1
-            self.daily_stats[user_id]["chars"] += text_length
-
         return await handler(event, data)
 
 router.message.middleware(AntiSpamMiddleware())
 
-# ── Fallback Helpers ──
-async def _force_fallback(message: Message, state: FSMContext):
+# ── FSM Helpers ──
+async def _start_manual_report_flow(message: Message, state: FSMContext, existing: Optional[dict] = None):
     user_id = message.from_user.id
-    if user_id in chat_history:
-        del chat_history[user_id]
-        
-    await state.clear()
-    
     telegram_id = str(user_id)
-    try:
-        repo = get_repo()
-        existing = await asyncio.to_thread(repo.find_reporter_by_telegram_id, telegram_id)
-    except:
-        existing = None
 
-    if existing and existing.get("phone"):
-        await state.update_data(
-            reporter_id=existing["id"],
-            reporter_name=existing.get("name", ""),
-            reporter_phone=existing.get("phone", ""),
-            telegram_id=telegram_id
-        )
-        await _show_kelurahan_picker(message, state)
-    else:
-        await state.update_data(
-            telegram_id=telegram_id,
-            reporter_name=_get_telegram_name(message.from_user),
-        )
-        await message.answer("Silakan tekan tombol di bawah untuk membagikan nomor telepon agar dapat melanjutkan:", reply_markup=contact_kb())
-        await state.set_state(ReportStates.INPUT_TELEPON)
+    await state.clear()
+    user_state[user_id] = _default_user_state(existing)
+    await state.update_data(
+        telegram_id=telegram_id,
+        reporter_id=(existing or {}).get("id"),
+        reporter_name=(existing or {}).get("name") or _get_telegram_name(message.from_user),
+        reporter_phone=(existing or {}).get("phone") or "",
+    )
+    await _show_kelurahan_picker(message, state)
 
 
-# ── FSM Core ──
 MAX_PHOTOS = 3
 _media_group_buffer: Dict[str, List[str]] = {}
 _media_group_tasks: Dict[str, asyncio.Task] = {}
@@ -335,177 +252,6 @@ class ReportStates(StatesGroup):
     KONFIRMASI = State()
 
 
-# ── LLM Core ──
-SYSTEM_PROMPT = """Kamu adalah Asisten ResikIn, bot lapor sampah di Yogyakarta.
-Kumpulkan info berikut:
-1. Nama Pelapor
-2. Kelurahan (Sistem otomatis mendeteksi dari GPS. JIKA warga sudah kirim lokasi GPS, MAKA SYARAT KELURAHAN OTOMATIS LENGKAP. JANGAN PERNAH TANYAKAN KELURAHAN JIKA GPS SUDAH ADA!).
-3. Deskripsi Masalah (Intinya saja: bau, numpuk, lokasi spesifik, dll).
-4. Foto Bukti (OPSIONAL tapi HARUS DITANYAKAN SEKALI. Tanya "ada foto sampahnya?" sebelum finalisasi. Jika warga bilang tidak ada atau menolak, terima saja dan lanjut).
-5. Lokasi GPS (WAJIB. Suruh tekan tombol 'Bagikan Lokasi' jika belum ada).
-
-ATURAN GAYA BAHASA (SANGAT PENTING):
-- Balas dengan 2-4 kalimat. Cukup singkat tapi tetap hangat dan natural seperti teman ngobrol, BUKAN robot.
-- Boleh pakai 1 emoji per pesan agar terasa ramah.
-- JANGAN membuat daftar (bullet points). Tanya cukup 1 hal per pesan.
-- Contoh BENAR: "Halo! Terima kasih sudah mau lapor, pasti mengganggu banget ya kalau sampah numpuk. 😊 Boleh tahu nama kamu siapa?"
-- Contoh BENAR 2: "Oke, deskripsinya sudah saya catat. Kalau sempat, boleh kirim foto sampahnya biar lebih jelas. Tapi kalau tidak ada juga tidak apa-apa!"
-- Contoh SALAH: "Bau sampah pasti mengganggu. Nama Anda siapa ya?" (terlalu kaku dan dingin)
-- Contoh SALAH 2: (Menjelaskan panjang lebar 5+ kalimat dengan bullet points).
-
-Jika warga mengirim foto, [System] akan memberikan hasil Vision AI. Jika spam, tolak dengan sopan.
-
-Jika menurutmu data sudah cukup, berikan respons JSON rahasia di akhir pesanmu. Sistem Python tetap akan memvalidasi ulang data wajib sebelum laporan benar-benar disimpan. Format JSON harus PERSIS seperti ini (dalam blok code json):
-```json
-{
-  "status": "complete",
-  "data": {
-    "reporter_name": "nama lengkap warga",
-    "kelurahan_id": "nama kelurahan (jika tahu), atau isi dengan 'dari_gps' jika tidak tahu dan mengandalkan sistem",
-    "description": "deskripsi detail",
-    "suggested_category": "kategori dari AI (tps_penuh, sampah_liar, tidak_terangkut, bau, lainnya)"
-  }
-}
-```"""
-
-class DeepSeekTimeoutError(Exception):
-    pass
-
-async def call_deepseek(user_id: int) -> str:
-    for attempt in range(3):
-        try:
-            response = await deepseek_client.chat.completions.create(
-                model="deepseek-v4-flash",
-                messages=chat_history[user_id],
-                max_tokens=800,
-                temperature=0.5,
-                timeout=5.0
-            )
-            reply = response.choices[0].message.content
-            chat_history[user_id].append({"role": "assistant", "content": reply})
-            return reply
-        except Exception as e:
-            logger.warning(f"DeepSeek API Error (attempt {attempt+1}): {e}")
-            await asyncio.sleep(0.5)
-            
-    raise DeepSeekTimeoutError("DeepSeek gagal merespons setelah 3 kali percobaan.")
-
-async def process_llm_response(user_id: int, message: Message, reply_text: str, state: FSMContext):
-    _mark_photo_asked_from_text(user_id, reply_text)
-    # Check for JSON block
-    match = re.search(r'```json\n(.*?)\n```', reply_text, re.DOTALL)
-    if match:
-        json_str = match.group(1)
-        try:
-            data = json.loads(json_str)
-            if data.get("status") == "complete":
-                text_part = reply_text[:match.start()].strip()
-                merge_ai_data(user_id, data.get("data") or {})
-                missing = validate_report_readiness(user_id)
-                if missing:
-                    if text_part:
-                        await message.answer(text_part)
-                    await _ask_for_missing_fields(user_id, message, state, missing)
-                    return
-
-                if text_part:
-                    await message.answer(text_part, reply_markup=ReplyKeyboardRemove())
-                else:
-                    await message.answer("Laporan Anda sudah lengkap, sedang kami proses...", reply_markup=ReplyKeyboardRemove())
-
-                await save_report_from_state(user_id, message)
-                return
-        except Exception as e:
-            logger.error(f"Failed to parse JSON from LLM: {e}")
-    
-    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-    loc_kb = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📍 Bagikan Lokasi Saat Ini", request_location=True)]],
-        resize_keyboard=True
-    )
-    await message.answer(reply_text, reply_markup=loc_kb)
-
-
-async def save_report(user_id: int, data: dict, message: Message):
-    merge_ai_data(user_id, data or {})
-    missing = validate_report_readiness(user_id)
-    if missing:
-        await _ask_for_missing_fields(user_id, message, None, missing)
-        return
-    await save_report_from_state(user_id, message)
-
-
-async def save_report_from_state(user_id: int, message: Message):
-    try:
-        repo = get_repo()
-        telegram_id = str(user_id)
-        state_data = ensure_user_state(user_id)
-        missing = validate_report_readiness(user_id)
-        if missing:
-            await _ask_for_missing_fields(user_id, message, None, missing)
-            return
-
-        reporter_name = (state_data.get("reporter_name") or "Anonim").strip()
-        existing_reporter = await asyncio.to_thread(repo.find_reporter_by_telegram_id, telegram_id)
-        
-        reporter_phone = state_data.get("reporter_phone") or ""
-        if existing_reporter:
-            reporter_id = existing_reporter["id"]
-            reporter_phone = existing_reporter.get("phone", "") or reporter_phone
-        else:
-            created = await asyncio.to_thread(repo.create_reporter, {
-                "telegram_id": telegram_id,
-                "name": reporter_name,
-                "phone": reporter_phone
-            })
-            reporter_id = created["id"] if created else None
-
-        report_model = Report(
-            user_id=telegram_id,
-            reporter_id=reporter_id,
-            reporter_name=reporter_name,
-            reporter_phone=reporter_phone,
-            kelurahan_id=state_data.get("kelurahan_id"),
-            category=state_data.get("category"),
-            file_ids=state_data.get("file_ids", []),
-            description=state_data.get("description", ""),
-            latitude=state_data.get("latitude"),
-            longitude=state_data.get("longitude"),
-            status="dikirim",
-            source="telegram",
-            metadata={}
-        )
-
-        inserted = await asyncio.to_thread(repo.insert_report, report_model.dict_for_db())
-        
-        tracking_code = None
-        inserted_row = None
-        if inserted and isinstance(inserted, list) and len(inserted) > 0:
-            tracking_code = inserted[0].get("tracking_code")
-            inserted_row = inserted[0]
-        elif isinstance(inserted, dict):
-            tracking_code = inserted.get("tracking_code")
-            inserted_row = inserted
-
-        msg = "✅ Laporan berhasil disimpan ke sistem pusat! Terima kasih."
-        if tracking_code:
-            msg += f"\n📋 Kode pelacakan Anda: {tracking_code}"
-            
-        await message.answer(msg, reply_markup=main_menu_kb())
-        
-        if inserted_row:
-            await _notify_koordinator_for_report(inserted_row)
-            
-        # Reset state after completion
-        if user_id in chat_history:
-            del chat_history[user_id]
-        if user_id in user_state:
-            del user_state[user_id]
-        
-    except Exception as e:
-        logger.exception("Failed to save report from LLM JSON")
-        await message.answer("Terjadi kesalahan sistem saat menyimpan laporan. Mohon maaf.")
-
 # ── Handlers ──
 
 @router.message(Command("link"))
@@ -561,25 +307,8 @@ async def cmd_start(message: Message, state: FSMContext):
 
     await state.clear()
     user_id = message.from_user.id
-    chat_history.pop(user_id, None)
     user_state.pop(user_id, None)
     await message.answer(MAIN_MENU_MESSAGE, reply_markup=main_menu_kb())
-
-
-async def _start_llm_report_flow(message: Message, state: FSMContext, existing: dict):
-    await state.clear()
-    user_id = message.from_user.id
-    chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    user_state[user_id] = _default_user_state(existing)
-    
-    chat_history[user_id].append({"role": "user", "content": f"Halo, saya {_get_telegram_name(message.from_user)}. Saya ingin melapor masalah sampah."})
-    
-    try:
-        reply = await run_with_chat_action(message.chat.id, "typing", call_deepseek(user_id))
-        await process_llm_response(user_id, message, reply, state)
-    except DeepSeekTimeoutError:
-        await message.answer("⚠️ Sistem AI kami sedang mengalami gangguan jaringan. Mari kita gunakan mode pelaporan manual.", reply_markup=ReplyKeyboardRemove())
-        await _force_fallback(message, state)
 
 
 async def _begin_report_flow(message: Message, state: FSMContext):
@@ -621,7 +350,7 @@ async def _begin_report_flow(message: Message, state: FSMContext):
         )
         return
 
-    await _start_llm_report_flow(message, state, existing)
+    await _start_manual_report_flow(message, state, existing)
 
 
 @router.message(F.text.func(is_report_button_text))
@@ -629,154 +358,9 @@ async def handle_report_button(message: Message, state: FSMContext):
     await _begin_report_flow(message, state)
 
 
-@router.message(StateFilter(None), F.text)
-async def handle_text_llm(message: Message, state: FSMContext):
-    user_id = message.from_user.id
-    if not has_active_report_memory(user_id):
-        await answer_idle_report_prompt(message)
-        return
-    if user_id not in chat_history:
-        chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    state_data = ensure_user_state(user_id)
-    if _is_photo_decline_text(message.text):
-        state_data["photo_was_asked"] = True
-        state_data["photo_declined"] = True
-
-    chat_history[user_id].append({"role": "user", "content": message.text})
-    
-    try:
-        reply = await run_with_chat_action(message.chat.id, "typing", call_deepseek(user_id))
-        await process_llm_response(user_id, message, reply, state)
-    except DeepSeekTimeoutError:
-        await message.answer("⚠️ Sistem AI cerdas kami gagal memproses setelah 3 kali percobaan. Jangan khawatir, mari alihkan ke form manual.")
-        await _force_fallback(message, state)
-
-
-@router.message(StateFilter(None), F.location)
-async def handle_location_llm(message: Message, state: FSMContext):
-    user_id = message.from_user.id
-    if not has_active_report_memory(user_id):
-        await answer_idle_report_prompt(message)
-        return
-    if user_id not in chat_history:
-        chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    state_data = ensure_user_state(user_id)
-
-    lat = message.location.latitude
-    lon = message.location.longitude
-    state_data["latitude"] = lat
-    state_data["longitude"] = lon
-    
-    # Lakukan Reverse Geocoding secara diam-diam
-    import aiohttp
-    kelurahan_detected = ""
-    try:
-        async with aiohttp.ClientSession() as session:
-            url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
-            async with session.get(url, headers={'User-Agent': 'ResikinBot/1.0'}, timeout=5) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    addr = data.get("address", {})
-                    # Cari nama desa/kelurahan
-                    kelurahan_detected = addr.get("village") or addr.get("suburb") or addr.get("town") or ""
-    except Exception:
-        pass
-
-    if kelurahan_detected:
-        system_note = f"[System] Warga telah membagikan lokasi GPS (Lat: {lat}, Lon: {lon}). Berdasarkan GPS, lokasi ini berada di Kelurahan {kelurahan_detected}. Syarat 'Kelurahan' dan 'Lokasi GPS' sudah LENGKAP. JANGAN tanyakan lagi soal kelurahan atau lokasi!"
-        state_data["kelurahan_detected"] = kelurahan_detected
-        normalized_kelurahan = normalize_kelurahan(kelurahan_detected, state_data)
-        if normalized_kelurahan:
-            state_data["kelurahan_id"] = normalized_kelurahan
-    else:
-        system_note = f"[System] Warga telah membagikan lokasi GPS (Lat: {lat}, Lon: {lon}). Syarat 'Lokasi GPS' dan 'Kelurahan' sudah LENGKAP dan TERPENUHI. JANGAN tanyakan lagi soal kelurahan atau lokasi!"
-        
-    chat_history[user_id].append({"role": "system", "content": system_note})
-    
-    # Langsung konfirmasi tanpa tanya AI lagi (agar tidak mengulangi "kirim GPS")
-    kel_text = f" di Kelurahan {kelurahan_detected}" if kelurahan_detected else ""
-    confirm_msg = f"📍 Lokasi GPS{kel_text} sudah diterima, terima kasih! 😊"
-    chat_history[user_id].append({"role": "assistant", "content": confirm_msg})
-    
-    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-    loc_kb = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📍 Bagikan Lokasi Saat Ini", request_location=True)]],
-        resize_keyboard=True
-    )
-    await message.answer(confirm_msg, reply_markup=loc_kb)
-    
-    # Selalu panggil AI setelah konfirmasi GPS agar percakapan lanjut
-    chat_history[user_id].append({"role": "system", "content": "[System] Lokasi GPS sudah diterima. Lanjutkan tanya data yang masih kurang, atau keluarkan JSON jika semua data sudah lengkap."})
-    try:
-        reply = await run_with_chat_action(message.chat.id, "typing", call_deepseek(user_id))
-        await process_llm_response(user_id, message, reply, state)
-    except DeepSeekTimeoutError:
-        await message.answer("⚠️ Sistem AI sedang gangguan. Mari beralih ke form manual.", reply_markup=ReplyKeyboardRemove())
-        await _force_fallback(message, state)
-
-@router.message(StateFilter(None), F.photo)
-async def handle_photo_llm(message: Message, state: FSMContext):
-    user_id = message.from_user.id
-    if not has_active_report_memory(user_id):
-        await answer_idle_report_prompt(message)
-        return
-    if user_id not in chat_history:
-        chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    state_data = ensure_user_state(user_id)
-
-    file_id = message.photo[-1].file_id
-    state_data["photo_was_asked"] = True
-    
-    try:
-        bot = get_bot()
-        await bot.send_chat_action(chat_id=message.chat.id, action="upload_photo")
-        file_info = await bot.get_file(file_id)
-        downloaded_file = await bot.download_file(file_info.file_path)
-        file_bytes = downloaded_file.read()
-        base64_str = base64.b64encode(file_bytes).decode('utf-8')
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                settings.AI_SERVICE_URL,
-                json={"image": f"data:image/jpeg;base64,{base64_str}"}
-            ) as resp:
-                ai_data = await resp.json()
-                
-        if ai_data.get("success"):
-            if ai_data.get("isWaste"):
-                cat = ai_data.get("suggested_category")
-                state_data["file_ids"].append(file_id)
-                state_data["photo_received"] = True
-                state_data["photo_validated_as_waste"] = True
-                category = normalize_category(cat)
-                if category:
-                    state_data["suggested_category"] = category
-                    state_data["category"] = category
-                system_note = f"[System] Warga baru saja mengirim foto BUKTI SAMPAH YANG VALID. Vision AI menyarankan kategori: '{cat}'. Lanjutkan percakapan untuk mengonfirmasi atau menanyakan data lain yang kurang."
-            else:
-                top_label = ai_data.get("top_label")
-                state_data["photo_received"] = False
-                state_data["photo_validated_as_waste"] = False
-                system_note = f"[System] Warga baru saja mengirim foto, TETAPI Vision AI mendeteksi itu BUKAN SAMPAH (spam/terdeteksi sebagai '{top_label}'). Tolak foto ini dengan sopan dan minta foto tumpukan sampah yang sebenarnya."
-        else:
-            state_data["file_ids"].append(file_id)
-            state_data["photo_received"] = True
-            system_note = "[System] Warga mengirim foto, namun Vision AI gagal memproses. Anggap saja foto sudah diterima, dan tanyakan data lain yang kurang."
-            
-    except Exception as e:
-        logger.error(f"Image validation error: {e}")
-        state_data["file_ids"].append(file_id)
-        state_data["photo_received"] = True
-        system_note = "[System] Warga mengirim foto. Vision AI sedang offline. Anggap foto diterima, tanyakan data lain yang kurang."
-
-    chat_history[user_id].append({"role": "system", "content": system_note})
-    
-    try:
-        reply = await run_with_chat_action(message.chat.id, "typing", call_deepseek(user_id))
-        await process_llm_response(user_id, message, reply, state)
-    except DeepSeekTimeoutError:
-        await message.answer("⚠️ Sistem AI gambar kami sedang gangguan. Mari kita gunakan pelaporan manual.")
-        await _force_fallback(message, state)
+@router.message(StateFilter(None), F.text | F.location | F.photo)
+async def handle_idle_report_input(message: Message, state: FSMContext):
+    await answer_idle_report_prompt(message)
 
 
 # ── FSM Manual Handlers ──
@@ -789,6 +373,89 @@ async def _show_kelurahan_picker(message: Message, state: FSMContext):
     kb = builder.as_markup()
     await message.answer("🏘️ [Mode Manual] Silakan pilih kelurahan:", reply_markup=kb)
     await state.set_state(ReportStates.PILIH_KELURAHAN)
+
+
+async def validate_telegram_photo(file_id: str, chat_id: int) -> dict:
+    try:
+        bot = get_bot()
+        await bot.send_chat_action(chat_id=chat_id, action="upload_photo")
+        file_info = await bot.get_file(file_id)
+        downloaded_file = await bot.download_file(file_info.file_path)
+        file_bytes = downloaded_file.read()
+        base64_str = base64.b64encode(file_bytes).decode("utf-8")
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                settings.AI_SERVICE_URL,
+                json={"image": f"data:image/jpeg;base64,{base64_str}"},
+            ) as resp:
+                ai_data = await resp.json()
+
+        if not ai_data.get("success"):
+            logger.warning("Photo validation returned unsuccessful response for file_id=%s", file_id)
+            return {"accepted": True, "fallback": True, "ai_data": ai_data}
+
+        if ai_data.get("isWaste"):
+            return {
+                "accepted": True,
+                "fallback": False,
+                "ai_data": ai_data,
+                "suggested_category": normalize_category(ai_data.get("suggested_category")),
+            }
+
+        return {
+            "accepted": False,
+            "fallback": False,
+            "ai_data": ai_data,
+            "top_label": ai_data.get("top_label"),
+        }
+    except Exception as exc:
+        logger.error("Image validation error for file_id=%s: %s", file_id, exc)
+        return {"accepted": True, "fallback": True, "ai_data": {}}
+
+
+async def _collect_valid_photo_ids(file_ids: List[str], message: Message, state: FSMContext) -> tuple[List[str], int, bool, Optional[str]]:
+    accepted_ids: List[str] = []
+    rejected_count = 0
+    used_fallback = False
+    suggested_category = None
+
+    for file_id in file_ids:
+        result = await validate_telegram_photo(file_id, message.chat.id)
+        if result.get("accepted"):
+            accepted_ids.append(file_id)
+            used_fallback = used_fallback or bool(result.get("fallback"))
+            suggested_category = suggested_category or result.get("suggested_category")
+        else:
+            rejected_count += 1
+            logger.info(
+                "Photo rejected by validation for user=%s file_id=%s top_label=%s",
+                message.from_user.id,
+                file_id,
+                result.get("top_label"),
+            )
+
+    accepted_ids = accepted_ids[:MAX_PHOTOS]
+    state_data = await state.get_data()
+    existing_ids = list(state_data.get("file_ids") or [])
+    combined_ids = (existing_ids + accepted_ids)[:MAX_PHOTOS]
+
+    update = {
+        "file_ids": combined_ids,
+        "photo_was_asked": True,
+        "photo_received": bool(combined_ids),
+        "photo_declined": False,
+        "photo_validated_as_waste": bool(combined_ids) and not used_fallback,
+    }
+    if suggested_category:
+        update["suggested_category"] = suggested_category
+
+    await state.update_data(**update)
+
+    draft = ensure_user_state(message.from_user.id)
+    draft.update(update)
+
+    return accepted_ids, rejected_count, used_fallback, suggested_category
 
 @router.message(StateFilter(ReportStates.INPUT_TELEPON), F.contact)
 async def handle_contact(message: Message, state: FSMContext):
@@ -825,7 +492,7 @@ async def handle_contact(message: Message, state: FSMContext):
         f"✅ Terima kasih! Nomor {phone} berhasil diamankan.",
         reply_markup=ReplyKeyboardRemove(),
     )
-    await _start_llm_report_flow(
+    await _start_manual_report_flow(
         message,
         state,
         {"id": reporter_id, "name": reporter_name, "phone": phone},
@@ -858,7 +525,7 @@ async def handle_phone_text_fallback(message: Message, state: FSMContext):
 
     await state.update_data(reporter_id=reporter_id, reporter_phone=phone)
     await message.answer(f"✅ Terima kasih! Nomor {phone} berhasil diamankan.", reply_markup=ReplyKeyboardRemove())
-    await _start_llm_report_flow(
+    await _start_manual_report_flow(
         message,
         state,
         {"id": reporter_id, "name": reporter_name, "phone": phone},
@@ -897,7 +564,27 @@ async def handle_category(call: CallbackQuery, state: FSMContext):
 
 @router.message(StateFilter(ReportStates.UPLOAD_FOTO), F.text)
 async def handle_photo_skip(message: Message, state: FSMContext):
-    await state.update_data(file_ids=[])
+    if not _is_photo_decline_text(message.text):
+        await message.answer(
+            f"Silakan unggah foto tumpukan sampah (maksimal {MAX_PHOTOS} foto), atau ketik '-' untuk melewati foto."
+        )
+        return
+
+    await state.update_data(
+        file_ids=[],
+        photo_was_asked=True,
+        photo_received=False,
+        photo_declined=True,
+        photo_validated_as_waste=False,
+    )
+    draft = ensure_user_state(message.from_user.id)
+    draft.update({
+        "file_ids": [],
+        "photo_was_asked": True,
+        "photo_received": False,
+        "photo_declined": True,
+        "photo_validated_as_waste": False,
+    })
     await message.answer("✅ Foto dilewati. Silakan ketik deskripsi laporan.")
     await state.set_state(ReportStates.INPUT_DESKRIPSI)
 
@@ -907,8 +594,15 @@ async def handle_photo_manual(message: Message, state: FSMContext):
     mg_id = message.media_group_id
 
     if mg_id is None:
-        await state.update_data(file_ids=[file_id])
-        await message.answer("✅ 1 foto diterima. Silakan ketik deskripsi laporan.")
+        accepted_ids, rejected_count, used_fallback, _ = await _collect_valid_photo_ids([file_id], message, state)
+        if not accepted_ids:
+            await message.answer(
+                "Foto belum terdeteksi sebagai bukti sampah. Silakan kirim foto tumpukan sampah yang lebih jelas, atau ketik '-' untuk melewati foto."
+            )
+            return
+
+        suffix = " Sistem validasi foto sedang tidak tersedia, jadi foto tetap diterima." if used_fallback else ""
+        await message.answer(f"✅ 1 foto diterima.{suffix} Silakan ketik deskripsi laporan.")
         await state.set_state(ReportStates.INPUT_DESKRIPSI)
         return
 
@@ -930,18 +624,28 @@ async def handle_photo_manual(message: Message, state: FSMContext):
         truncated = False
         if len(collected) > MAX_PHOTOS:
             truncated = True
-            collected = collected[:MAX_PHOTOS]
 
-        await ctx_state.update_data(file_ids=collected)
+        accepted_ids, rejected_count, used_fallback, _ = await _collect_valid_photo_ids(collected, ctx_msg, ctx_state)
+
+        if not accepted_ids:
+            await ctx_msg.answer(
+                "Foto belum terdeteksi sebagai bukti sampah. Silakan kirim foto tumpukan sampah yang lebih jelas, atau ketik '-' untuk melewati foto."
+            )
+            return
 
         if truncated:
             await ctx_msg.answer(
                 f"⚠️ Maksimal {MAX_PHOTOS} foto per laporan. "
                 f"Hanya {MAX_PHOTOS} foto pertama yang disimpan."
             )
+        if rejected_count:
+            await ctx_msg.answer(
+                f"{rejected_count} foto belum terdeteksi sebagai bukti sampah dan tidak disimpan."
+            )
 
+        suffix = " Sistem validasi foto sedang tidak tersedia untuk sebagian foto, jadi foto tersebut tetap diterima." if used_fallback else ""
         await ctx_msg.answer(
-            f"✅ {len(collected)} foto diterima. Silakan ketik deskripsi laporan."
+            f"✅ {len(accepted_ids)} foto diterima.{suffix} Silakan ketik deskripsi laporan."
         )
         await ctx_state.set_state(ReportStates.INPUT_DESKRIPSI)
 

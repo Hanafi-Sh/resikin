@@ -23,8 +23,8 @@ Sistem ini terdiri dari **dua komponen utama**:
 - **📋 Info Publik** — Pengumuman dan tips kebersihan
 
 ### 🤖 Telegram Bot
-- **💬 Pelaporan via Chat AI** — Warga bisa melapor langsung dari Telegram dengan percakapan natural berbasis DeepSeek
-- **🛡️ Guardrail Deterministik** — Data laporan tetap divalidasi Python sebelum disimpan, sehingga AI tidak menjadi sumber kebenaran akhir
+- **💬 Pelaporan via FSM Telegram** — Warga membuat laporan lewat alur terstruktur yang konsisten dan mudah diuji
+- **🛡️ Guardrail Deterministik** — Data laporan tetap divalidasi Python sebelum disimpan
 - **📷 Foto Opsional + Validasi AI** — Foto bisa dikirim dari chat dan divalidasi lewat AI service; warga juga bisa lanjut tanpa foto
 - **📍 Share Lokasi Wajib** — Gunakan fitur location Telegram untuk titik koordinat yang akurat
 - **🏘️ Deteksi/Pilih Kelurahan** — Bot mencoba membaca kelurahan dari GPS dan fallback ke pilihan manual 45 kelurahan Yogyakarta
@@ -53,7 +53,6 @@ Sistem ini terdiri dari **dua komponen utama**:
 |-------|-----------|
 | Bot Framework | aiogram 3.27 (Python, async) |
 | API Server | FastAPI (notifikasi status, image proxy & health check) |
-| Conversational AI | DeepSeek via OpenAI-compatible SDK |
 | Image AI | Python AI microservice via `AI_SERVICE_URL` |
 | Database | Supabase (shared dengan web app) |
 | Runtime | Python 3.12+ |
@@ -127,7 +126,6 @@ cp .env.example .env
 #   - SUPABASE_SERVICE_ROLE_KEY
 #   - NOTIFY_WEBHOOK_SECRET (harus sama dengan BOT_NOTIFY_SECRET)
 #   - APP_BASE_URL (URL web publik untuk tombol notifikasi Telegram)
-#   - DEEPSEEK_API_KEY (untuk percakapan AI bot)
 #   - AI_SERVICE_URL (untuk validasi foto dari bot)
 
 # 4. Jalankan bot + FastAPI notification server dalam satu proses
@@ -291,7 +289,6 @@ ResikIn memakai AI di dua tempat:
 | Area | Env | Fungsi |
 |------|-----|--------|
 | Web App | `AI_SERVICE_URL` | Proxy validasi foto laporan dan rekomendasi petugas ke AI microservice |
-| Telegram Bot | `DEEPSEEK_API_KEY` | Percakapan natural dan ekstraksi data laporan |
 | Telegram Bot | `AI_SERVICE_URL` | Validasi foto dari Telegram sebelum dianggap bukti sampah |
 
 Endpoint AI microservice yang dipakai web app:
@@ -301,7 +298,7 @@ POST <AI_SERVICE_URL>/api/ai/validate-image
 POST <AI_SERVICE_URL>/api/ai/recommend-assignment
 ```
 
-Di web app, `AI_SERVICE_URL` adalah base URL service. Di bot Telegram, `AI_SERVICE_URL` menunjuk langsung ke endpoint validasi foto, misalnya `https://ai.example.com/api/validate-image`. Jika AI service tidak tersedia, web route akan memberi respons error/fallback sesuai endpoint, sedangkan bot tetap melanjutkan percakapan dengan guardrail Python agar laporan tidak tersimpan dalam kondisi tidak lengkap.
+Di web app, `AI_SERVICE_URL` adalah base URL service. Di bot Telegram, `AI_SERVICE_URL` menunjuk langsung ke endpoint validasi foto, misalnya `https://ai.example.com/api/validate-image`. Jika AI service tidak tersedia, web route akan memberi respons error/fallback sesuai endpoint, sedangkan bot tetap melanjutkan FSM dan menjaga data wajib sebelum laporan disimpan.
 
 ## 🗄️ Database
 

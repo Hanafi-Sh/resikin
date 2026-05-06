@@ -11,11 +11,11 @@ Service ini adalah **service Python terpisah** dari web app Next.js. Bot ini men
 - [Tech Stack](#-tech-stack)
 - [Arsitektur Sistem](#-arsitektur-sistem)
 - [Struktur Folder](#-struktur-folder)
-- [Alur Bot Hybrid AI + FSM](#-alur-bot-hybrid-ai--fsm)
+- [Alur Bot FSM + Validasi Foto](#-alur-bot-fsm--validasi-foto)
 - [Setup & Menjalankan Lokal](#-setup--menjalankan-lokal)
 - [Environment Variables](#-environment-variables)
 - [Database Migration](#-database-migration)
-- [AI Flow & Guardrails](#-ai-flow--guardrails)
+- [Validasi Foto & Guardrails](#-validasi-foto--guardrails)
 - [API Endpoints (FastAPI)](#-api-endpoints-fastapi)
 - [Skema Data](#-skema-data)
 - [Keputusan Arsitektur](#-keputusan-arsitektur)
@@ -31,7 +31,6 @@ Service ini adalah **service Python terpisah** dari web app Next.js. Bot ini men
 |----------|-----------|------------|
 | Bot Framework | [aiogram 3.27](https://docs.aiogram.dev/) | Async Telegram bot framework dengan FSM |
 | API Server | [FastAPI](https://fastapi.tiangolo.com/) | Untuk notifikasi status, image proxy, dan health check |
-| Conversational AI | DeepSeek via OpenAI-compatible SDK | Mengarahkan percakapan dan mengekstrak data laporan |
 | AI Microservice | HTTP service via `AI_SERVICE_URL` | Validasi foto sampah dari Telegram |
 | Database | [Supabase](https://supabase.com/) (PostgreSQL) | Shared dengan web app Next.js |
 | HTTP Client | httpx | Untuk komunikasi ke Telegram API |
@@ -63,9 +62,9 @@ Service ini adalah **service Python terpisah** dari web app Next.js. Bot ini men
 - **`run_bot.py`** — Menjalankan FastAPI notification server di background thread, lalu Telegram long polling di main thread.
 - **`uvicorn app.main`** — Opsional untuk debugging endpoint FastAPI secara terpisah. Jangan jalankan bersamaan di port yang sama dengan `run_bot.py`.
 
-**Komponen AI:**
-- DeepSeek dipakai untuk membuat percakapan lebih natural dan mengekstrak kandidat data laporan.
-- Python validator di `app/bot.py` tetap menjadi penentu akhir apakah laporan boleh disimpan.
+**Komponen validasi:**
+- FSM di `app/bot.py` mengumpulkan Draf Laporan secara eksplisit.
+- Python validator tetap menjadi penentu akhir apakah laporan boleh disimpan.
 - AI microservice di `AI_SERVICE_URL` dipakai untuk validasi foto dari Telegram.
 
 ---
@@ -112,13 +111,13 @@ services/telegram_bot/
 
 ---
 
-## 🔄 Alur Bot Hybrid AI + FSM
+## 🔄 Alur Bot FSM + Validasi Foto
 
-Bot memakai pendekatan **hybrid**:
+Bot memakai pendekatan **FSM deterministik**:
 
-- **DeepSeek** mengarahkan percakapan natural dan mengekstrak data dari chat.
+- **FSM** mengarahkan Pelapor lewat pilihan dan input eksplisit.
 - **Python validator** menyimpan state terstruktur dan memutuskan apakah laporan sudah lengkap.
-- **FSM manual** tetap dipakai untuk fallback, pilihan kelurahan/kategori, dan kondisi AI tidak bisa diandalkan.
+- **Validasi Foto Laporan** tetap memakai AI microservice lewat `AI_SERVICE_URL`.
 
 Flow utama:
 
@@ -133,11 +132,12 @@ Flow utama:
               |     -> bot meminta nomor via contact button atau input manual
               |
               +-- User lama
-                    -> bot memulai percakapan AI
-                    -> user mengirim teks/foto/lokasi
-                    -> DeepSeek mengekstrak kandidat data
-                    -> Python validator cek kelengkapan
-                    -> jika belum lengkap, bot bertanya field berikutnya
+                    -> bot meminta pilih kelurahan
+                    -> bot meminta pilih kategori
+                    -> bot meminta foto atau skip
+                    -> bot meminta deskripsi
+                    -> bot meminta lokasi
+                    -> bot menampilkan konfirmasi
                     -> jika lengkap, laporan disimpan ke Supabase
                     -> bot mengirim kode tracking dan menampilkan tombol lapor lagi
 ```
@@ -148,22 +148,22 @@ Syarat deterministik sebelum laporan disimpan:
 
 | Field | Aturan |
 |-------|--------|
-| Nama pelapor | Harus ada, dari reporter lama atau hasil ekstraksi AI |
+| Nama pelapor | Harus ada, dari reporter lama atau nama Telegram |
 | Deskripsi | Minimal 10 karakter |
 | Lokasi | `latitude` dan `longitude` wajib dari share location Telegram |
 | Kelurahan | Harus cocok dengan id/nama dari 45 kelurahan resmi |
-| Kategori | Harus salah satu kategori resmi; nilai invalid dari AI dinormalisasi ke `lainnya` |
+| Kategori | Harus salah satu kategori resmi |
 | Foto | Opsional, tetapi bot harus pernah menerima foto valid atau user eksplisit menolak foto |
 
 Foto dikirim ke AI microservice. Jika terdeteksi sampah, `file_id` disimpan. Jika terdeteksi spam/non-sampah, foto tidak dihitung sebagai bukti laporan dan bot meminta foto lain atau user boleh lanjut tanpa foto.
 
-FSM manual masih tersedia dengan state:
+FSM memakai state:
 
 ```txt
 INPUT_TELEPON -> PILIH_KELURAHAN -> PILIH_KATEGORI -> UPLOAD_FOTO -> INPUT_DESKRIPSI -> SHARE_LOCATION -> KONFIRMASI
 ```
 
-Fallback ke FSM terjadi saat DeepSeek timeout, user melewati limit AI harian, atau validator membutuhkan pilihan manual seperti kelurahan yang tidak bisa dipetakan dari GPS.
+Jika validasi foto gagal karena AI service tidak tersedia, bot tetap menerima foto agar Pelapor tidak terblokir.
 
 ---
 
@@ -213,7 +213,6 @@ HOST=0.0.0.0
 PORT=8000
 NOTIFY_WEBHOOK_SECRET=your-shared-secret
 APP_BASE_URL=http://127.0.0.1:3000
-DEEPSEEK_API_KEY=your-deepseek-api-key
 AI_SERVICE_URL=http://localhost:8001/api/validate-image
 ```
 
@@ -287,10 +286,11 @@ Jangan jalankan `uvicorn` dan `python run_bot.py` bersamaan di port yang sama.
 3. Klik **Start** atau ketik `/start`
 4. Tekan tombol **📝 Saya mau lapor**
 5. Jika diminta nomor telepon, tekan contact button atau ketik nomor manual
-6. Jelaskan masalah sampah secara natural
-7. Kirim lokasi GPS saat diminta
-8. Kirim foto jika ada, atau balas `tidak ada foto`
-9. Tunggu kode tracking setelah laporan lolos validasi
+6. Pilih kelurahan dan kategori laporan
+7. Kirim foto jika ada, atau balas `-` untuk melewati foto
+8. Ketik deskripsi masalah sampah
+9. Kirim lokasi GPS saat diminta
+10. Konfirmasi laporan dan tunggu kode tracking
 
 ### Testing Notifikasi Status dari Web
 
@@ -321,7 +321,6 @@ Kontrak event antara web app dan bot service dicatat di [`../../docs/contracts/r
 | `REDIS_TTL_SECONDS` | ❌ | TTL cache Redis dalam detik (default: `3600`) |
 | `NOTIFY_WEBHOOK_SECRET` | ✅ untuk notifikasi | Shared secret. Harus sama dengan `BOT_NOTIFY_SECRET` di web app |
 | `APP_BASE_URL` | ✅ untuk tombol Telegram | URL web app publik untuk tombol tracking, misalnya domain production atau URL ngrok |
-| `DEEPSEEK_API_KEY` | ✅ untuk mode AI | API key DeepSeek untuk percakapan dan ekstraksi data laporan |
 | `AI_SERVICE_URL` | ✅ untuk validasi foto | URL endpoint validasi foto. Default bot: `http://localhost:8001/api/validate-image` |
 
 > **File `.env` tidak boleh di-commit ke Git!** File sudah dimasukkan di `.gitignore`.
@@ -350,9 +349,9 @@ Bot memerlukan beberapa migration yang membuat tabel/kolom berikut tersedia:
 
 Bot mengirim data laporan ke fungsi database `create_report_intake`. Fungsi ini menyimpan status awal `dikirim`, membuat kode tracking, dan membuat entry awal di `status_history` dengan catatan laporan dibuat melalui bot Telegram.
 
-## 🧠 AI Flow & Guardrails
+## 🧠 Validasi Foto & Guardrails
 
-DeepSeek digunakan untuk membuat percakapan lebih natural, tetapi tidak dipercaya sebagai sumber kebenaran akhir. Saat DeepSeek mengeluarkan JSON `status: complete`, bot hanya memperlakukannya sebagai kandidat data. Data tersebut di-merge ke `user_state`, lalu validator Python menentukan apakah laporan boleh disimpan.
+Bot mengumpulkan Draf Laporan lewat FSM eksplisit. Validasi Foto Laporan memakai AI microservice, tetapi Python validator tetap menentukan apakah laporan boleh disimpan.
 
 Data yang dilacak di `user_state`:
 
@@ -360,14 +359,14 @@ Data yang dilacak di `user_state`:
 |-------|------------|
 | `reporter_name`, `reporter_phone`, `reporter_id` | Identitas warga |
 | `description` | Deskripsi masalah sampah |
-| `category`, `suggested_category` | Kategori resmi laporan |
-| `kelurahan_id`, `kelurahan_detected` | Kelurahan resmi atau hasil deteksi GPS |
+| `category`, `suggested_category` | Kategori resmi laporan dan saran kategori dari validasi foto |
+| `kelurahan_id`, `kelurahan_detected` | Kelurahan resmi atau hasil deteksi internal |
 | `latitude`, `longitude` | Koordinat wajib dari Telegram location |
 | `file_ids` | Foto valid yang disimpan sebagai Telegram `file_id` |
 | `photo_was_asked`, `photo_received`, `photo_declined`, `photo_validated_as_waste` | Status validasi foto |
 | `missing_fields`, `last_ai_data` | Debug/progress internal |
 
-Validator menahan penyimpanan jika data belum lengkap. Prioritas pertanyaan lanjutan adalah lokasi, deskripsi, foto, kelurahan/kategori manual, lalu simpan.
+Validator menahan penyimpanan jika data belum lengkap. Urutan FSM utama adalah kelurahan, kategori, foto, deskripsi, lokasi, konfirmasi, lalu simpan.
 
 ### Validasi Foto AI
 
@@ -383,13 +382,9 @@ Handler foto mengunduh file dari Telegram, mengubahnya ke base64, lalu mengirim 
 }
 ```
 
-Jika `isWaste=true`, `file_id` disimpan dan kategori saran dipakai jika valid. Jika `isWaste=false`, foto dianggap spam/non-sampah dan tidak masuk `file_ids`. Jika AI service gagal, bot tetap menerima foto agar warga tidak terblokir total, tetapi validator tetap menjaga field wajib lain.
+Jika `isWaste=true`, `file_id` disimpan dan kategori saran dicatat sebagai `suggested_category` tanpa menimpa kategori yang sudah dipilih Pelapor. Jika `isWaste=false`, foto tidak masuk `file_ids` dan bot meminta foto lain atau Pelapor boleh melewati foto. Jika AI service gagal, bot tetap menerima foto agar warga tidak terblokir total, tetapi validator tetap menjaga field wajib lain.
 
-### Reverse Geocoding GPS
-
-Saat user mengirim lokasi, bot mencoba reverse geocoding ke Nominatim/OpenStreetMap untuk mendeteksi kelurahan. Jika nama hasil GPS bisa dipetakan ke 45 kelurahan resmi, `kelurahan_id` diisi otomatis. Jika tidak bisa dipetakan, bot meminta user memilih kelurahan secara manual.
-
-### Anti-Spam dan Limit AI
+### Anti-Spam
 
 Bot memiliki middleware anti-spam:
 
@@ -397,10 +392,6 @@ Bot memiliki middleware anti-spam:
 |-------|-------|
 | Cooldown antar pesan | 2 detik |
 | Maks karakter per pesan | 2000 |
-| Maks chat AI per hari | 100 |
-| Maks karakter AI per hari | 50000 |
-
-Jika limit AI harian tercapai, bot mengalihkan user ke mode manual/FSM.
 
 ---
 
@@ -505,8 +496,8 @@ Data yang dikirim bot ke Supabase:
 | **`tracking_code` auto-generated** | Trigger DB generate format `RSK-YYYYMMDD-XXXXX`, user-friendly |
 | **Identitas warga memakai tabel `reporters`** | Warga Telegram disimpan sebagai reporter, bukan `telegram_links`; `telegram_links` dipakai untuk koordinator/petugas |
 | **`run_bot.py` menjalankan polling + FastAPI** | Satu proses cukup untuk bot dan endpoint notifikasi/image proxy |
-| **DeepSeek bukan sumber kebenaran akhir** | AI hanya membantu percakapan dan ekstraksi; Python validator menentukan apakah laporan boleh disimpan |
-| **FSM tetap ada sebagai fallback** | Jika AI timeout/limit/kelurahan tidak yakin, bot bisa kembali ke alur manual yang terstruktur |
+| **FSM menjadi alur utama Draf Laporan** | Bot tidak bergantung pada LLM chat untuk mengumpulkan data laporan |
+| **Validasi Foto Laporan tetap berbasis AI service** | AI dipakai hanya untuk memeriksa apakah foto relevan sebagai bukti sampah |
 | **Foto opsional tetapi eksplisit** | Laporan boleh tanpa foto hanya jika user sudah ditanya dan menolak foto |
 | **AI service failure tidak boleh merusak data** | Bot tetap melanjutkan flow, tetapi validator mencegah laporan tidak lengkap tersimpan |
 | **Tracking link dirender server-side** | Halaman `/tracking?code=...` mengambil report awal dari server agar stabil saat dibuka dari Telegram/ngrok |
@@ -561,11 +552,8 @@ Mode production tidak memakai HMR/WebSocket Next dev server, sehingga lebih coco
 | `ModuleNotFoundError` | Virtual environment tidak aktif | Jalankan `source .venv/bin/activate` terlebih dahulu |
 | `TELEGRAM_BOT_TOKEN is missing` | File `.env` belum dibuat/diisi | Salin `.env.example` → `.env` dan isi semua credential |
 | `Supabase configuration is missing` | `SUPABASE_URL` atau `SUPABASE_SERVICE_ROLE_KEY` kosong | Isi di file `.env` (ambil dari Supabase Dashboard → Settings → API) |
-| `DEEPSEEK_API_KEY` kosong/salah | Bot tidak bisa memanggil DeepSeek | Isi API key valid; jika gagal terus, bot akan fallback ke mode manual |
-| DeepSeek timeout | Jaringan/API DeepSeek lambat atau limit | Bot otomatis mengalihkan ke FSM manual setelah retry |
 | `AI_SERVICE_URL` salah | Validasi foto gagal | Pastikan URL menunjuk endpoint validasi foto yang bisa diakses dari service bot |
 | Foto valid selalu dianggap spam | Model/endpoint AI service salah klasifikasi | Cek response `top_label` dan threshold di AI service |
-| GPS tidak mendeteksi kelurahan | Nominatim gagal atau nama tidak cocok daftar resmi | Bot akan meminta user memilih kelurahan secara manual |
 | Bot tidak merespons `/start` | `run_bot.py` tidak sedang berjalan | Pastikan proses `python run_bot.py` aktif di terminal |
 | Error saat simpan laporan | Migration `002` belum dijalankan | Jalankan `002_telegram_bot_support.sql` di Supabase SQL Editor |
 | `tracking_code` duplicate | Collision di random 5-digit | Sangat jarang terjadi; re-run bot untuk retry |
@@ -590,15 +578,14 @@ pytest tests/ -v
 
 Test suite mencakup:
 
-- DeepSeek retry/timeout dan parsing JSON AI.
 - Guardrail validator sebelum laporan disimpan.
-- Handler text/location/photo dan foto spam.
+- Handler FSM untuk nomor telepon, kelurahan, kategori, foto, deskripsi, lokasi, dan konfirmasi.
+- Validasi Foto Laporan, termasuk foto spam/non-sampah dan fallback saat AI service gagal.
 - Anti-spam middleware.
-- FSM manual fallback.
 - Endpoint notifikasi FastAPI.
 - Repository Laporan Intake dan runner `run_bot.py`.
 
-External service seperti Telegram, Supabase, DeepSeek, Nominatim, dan AI microservice dimock di unit test.
+External service seperti Telegram, Supabase, dan AI microservice dimock di unit test.
 
 ### Cek Data Notifikasi Manual
 

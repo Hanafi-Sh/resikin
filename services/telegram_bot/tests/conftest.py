@@ -8,7 +8,6 @@ import pytest
 
 
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "123:TEST")
-os.environ.setdefault("DEEPSEEK_API_KEY", "test-key")
 
 
 @dataclass
@@ -142,12 +141,10 @@ class DummyBot:
 @pytest.fixture
 def bot_module(monkeypatch):
     module = importlib.import_module("app.bot")
-    module.chat_history.clear()
     module.user_state.clear()
     module._repo = None
     module._bot = None
     yield module
-    module.chat_history.clear()
     module.user_state.clear()
     module._repo = None
     module._bot = None
