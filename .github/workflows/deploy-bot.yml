@@ -55,8 +55,14 @@ jobs:
                 --exclude .env.* \
                 --exclude __pycache__ \
                 "$REPO_DIR/services/telegram_bot/" "$BOT_DIR/"
-              find "$BOT_DIR" -type d -name __pycache__ -prune -exec rm -rf {} +
-              find "$BOT_DIR" -name "*.pyc" -delete
+              find "$BOT_DIR" \
+                -path "$BOT_DIR/venv" -prune -o \
+                -path "$BOT_DIR/.venv" -prune -o \
+                -type d -name __pycache__ -prune -exec rm -rf {} +
+              find "$BOT_DIR" \
+                -path "$BOT_DIR/venv" -prune -o \
+                -path "$BOT_DIR/.venv" -prune -o \
+                -name "*.pyc" -delete
             else
               echo "No git repository containing services/telegram_bot found under /home/ubuntu."
               echo "Falling back to the VPS deploy script."
