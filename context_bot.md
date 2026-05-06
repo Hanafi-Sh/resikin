@@ -9,8 +9,7 @@ Target MVP tetap sama: warga bisa mengirim laporan yang cukup lengkap, koordinat
 ## 2. Tech Stack & Infrastructure
 
 - **Backend Framework:** Python dengan FastAPI.
-- **Telegram Library:** aiogram 3.x dengan FSM untuk fallback/manual flow.
-- **Conversational AI:** DeepSeek via OpenAI-compatible SDK.
+- **Telegram Library:** aiogram 3.x dengan FSM untuk Draf Laporan.
 - **Image AI:** AI microservice melalui `AI_SERVICE_URL`.
 - **Database:** Supabase PostgreSQL.
 - **Dev Runtime:** Long polling Telegram.
@@ -21,18 +20,18 @@ Target MVP tetap sama: warga bisa mengirim laporan yang cukup lengkap, koordinat
 AI agent atau developer yang mengubah bot wajib mematuhi prinsip berikut:
 
 - **Single Bot Architecture:** Satu bot terpusat untuk semua 45 kelurahan Kota Yogyakarta. Tidak ada multi-tenant bot token.
-- **Hybrid AI + Deterministic Validator:** DeepSeek boleh mengarahkan percakapan dan mengekstrak kandidat data, tetapi Python validator adalah sumber kebenaran akhir sebelum laporan disimpan.
-- **FSM Fallback:** FSM aiogram tetap wajib dipertahankan untuk fallback saat AI timeout, user terkena limit, atau bot membutuhkan pilihan manual seperti kelurahan/kategori.
+- **FSM + Deterministic Validator:** FSM aiogram mengarahkan Draf Laporan, dan Python validator adalah sumber kebenaran akhir sebelum laporan disimpan.
+- **No LLM Chat Runtime:** Bot Telegram tidak memakai LLM chat untuk mengumpulkan data laporan.
 - **No Supabase Storage:** Foto Telegram tidak diunggah ke Supabase Storage. Bot menyimpan `file_id`/`file_ids`, dan FastAPI menyediakan endpoint proxy gambar.
 - **Web Photo Normalization:** Web app menormalisasi `reports.file_ids` menjadi item `report_photos` sementara dengan URL `BOT_NOTIFY_URL/telegram/file/{file_id}` agar UI bisa menampilkan foto Telegram dan foto Storage dengan bentuk data yang sama.
 - **Completion Photos Are Web-Owned:** Foto bukti penyelesaian petugas bukan bagian dari flow Telegram. Foto ini di-upload oleh web app ke Supabase Storage dan disimpan di `report_photos` dengan `type='completion'`.
 - **Simple Spatial Data:** Koordinat disimpan sebagai `latitude` dan `longitude` float, bukan PostGIS.
 - **External Web App:** Dashboard/tracking dibuka lewat link web biasa, bukan Telegram Mini App.
-- **AI Failure Must Be Safe:** Jika DeepSeek atau AI image service gagal, bot tidak boleh menyimpan laporan yang tidak lengkap. Fallback ke FSM/manual prompt harus tersedia.
+- **AI Failure Must Be Safe:** Jika AI image service gagal, bot tidak boleh menyimpan laporan yang tidak lengkap. Foto boleh diterima sebagai fallback, tetapi field wajib lain tetap dijaga oleh FSM/validator.
 
 ## 4. Expected Bot Flow
 
-Flow utama saat ini bukan FSM linear penuh, tetapi hybrid:
+Flow utama saat ini adalah FSM linear:
 
 1. **Entry Point**
    - `/start` menampilkan menu awal, bukan langsung memulai laporan.
@@ -40,16 +39,17 @@ Flow utama saat ini bukan FSM linear penuh, tetapi hybrid:
    - Tombol ini disembunyikan selama flow laporan berjalan dan muncul lagi setelah laporan selesai/batal.
    - Jika tombol ditekan saat laporan masih aktif, bot tidak boleh mereset progres laporan.
 
-2. **Percakapan AI**
-   - User bisa menjelaskan masalah secara natural.
-   - DeepSeek mengekstrak kandidat: nama, deskripsi, kelurahan, kategori.
-   - Bot menyimpan progres di `user_state`.
+2. **FSM Draf Laporan**
+   - Bot meminta nomor telepon jika Pelapor belum tersimpan.
+   - Bot meminta pilihan kelurahan.
+   - Bot meminta pilihan kategori.
+   - Bot meminta foto atau skip.
+   - Bot meminta deskripsi dan lokasi.
+   - Bot menampilkan konfirmasi sebelum menyimpan laporan.
 
 3. **Lokasi GPS**
    - Lokasi wajib berasal dari Telegram location.
-   - Bot mencoba reverse geocoding via Nominatim/OpenStreetMap.
-   - Jika kelurahan hasil GPS bisa dipetakan ke daftar resmi, `kelurahan_id` diisi otomatis.
-   - Jika tidak bisa dipetakan, bot meminta pilihan kelurahan manual.
+   - Kelurahan dipilih eksplisit sebelum lokasi diminta.
 
 4. **Foto**
    - Foto opsional, tetapi bot harus pernah menanyakan foto.
@@ -60,7 +60,6 @@ Flow utama saat ini bukan FSM linear penuh, tetapi hybrid:
 
 5. **Deterministic Validation**
    - Laporan hanya boleh disimpan jika validator Python menyatakan lengkap.
-   - DeepSeek JSON `status: complete` hanya dianggap kandidat, bukan keputusan final.
 
 6. **Persistence**
    - Bot menyimpan laporan ke Supabase dengan `source='telegram'` dan status awal `dikirim`.

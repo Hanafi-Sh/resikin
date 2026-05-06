@@ -95,6 +95,8 @@ def ensure_user_state(user_id: int, existing_reporter: Optional[dict] = None) ->
 
 
 def is_photo_decline_text(text: Optional[str]) -> bool:
+    if (text or "").strip() == "-":
+        return True
     key = normalize_lookup_key(text or "")
     return key in PHOTO_DECLINE_WORDS or key.startswith("tidakadafoto") or key.startswith("gakadafoto")
 

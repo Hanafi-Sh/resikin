@@ -28,6 +28,10 @@ _Avoid_: reporter, user
 Visual evidence submitted by a Pelapor as part of a waste report.
 _Avoid_: attachment
 
+**Validasi Foto Laporan**:
+The process of checking whether a Foto Laporan is likely to show a waste issue before the photo is accepted into a Draf Laporan.
+_Avoid_: AI chat validation, image moderation
+
 **Foto Penyelesaian**:
 Visual evidence submitted by a petugas when completing assigned work.
 _Avoid_: completion attachment
@@ -58,6 +62,8 @@ _Avoid_: webhook event, bot message
 - A web **Pelapor** is stored as a name/phone snapshot on the report.
 - A Telegram **Pelapor** may be remembered as a reporter record and referenced by the report.
 - A **Laporan Intake** may include one or more **Foto Laporan** from web storage URLs or Telegram file identifiers.
+- A **Draf Laporan** may use **Validasi Foto Laporan** before accepting a Telegram **Foto Laporan**.
+- **Validasi Foto Laporan** does not replace the Pelapor's selected report category.
 - **Alur Penanganan Laporan** may add one or more **Foto Penyelesaian** when work is completed.
 - A **Galeri Laporan** may contain **Foto Laporan** and **Foto Penyelesaian** from different storage sources.
 - A **Laporan Terkirim** should have a **Kelurahan Laporan** when it can be determined, but web intake may temporarily store reports without one.

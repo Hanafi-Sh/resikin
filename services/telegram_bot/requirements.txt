@@ -9,5 +9,3 @@ redis>=4.5.0
 pytest
 pytest-asyncio
 pydantic-settings
-
-openai

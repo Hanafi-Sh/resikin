@@ -31,28 +31,22 @@ async def test_report_button_new_user_requires_phone(bot_module, monkeypatch, im
 
 
 @pytest.mark.asyncio
-async def test_report_button_existing_user_enters_llm_flow(
-    bot_module, monkeypatch, immediate_to_thread, dummy_bot
+async def test_report_button_existing_user_enters_fsm_flow(
+    bot_module, monkeypatch, immediate_to_thread
 ):
     repo = DummyRepo(reporter={"id": "reporter-1", "phone": "08123", "name": "Budi"})
     monkeypatch.setattr(bot_module, "get_repo", lambda: repo)
-
-    async def fake_call_deepseek(user_id):
-        return "Apa detail masalah sampahnya?"
-
-    monkeypatch.setattr(bot_module, "call_deepseek", fake_call_deepseek)
     message = FakeMessage(text=bot_module.MAIN_MENU_REPORT_TEXT, user_id=7)
     state = FakeState()
 
     await bot_module.handle_report_button(message, state)
 
-    assert bot_module.chat_history[7][0]["role"] == "system"
+    assert state.state == bot_module.ReportStates.PILIH_KELURAHAN.state
     assert bot_module.user_state[7]["file_ids"] == []
     assert bot_module.user_state[7]["suggested_category"] is None
     assert bot_module.user_state[7]["reporter_id"] == "reporter-1"
     assert bot_module.user_state[7]["reporter_phone"] == "08123"
-    assert message.answers[0]["text"] == "Apa detail masalah sampahnya?"
-    assert dummy_bot.actions[0]["action"] == "typing"
+    assert "pilih kelurahan" in message.answers[0]["text"].lower()
 
 
 @pytest.mark.asyncio
@@ -67,58 +61,34 @@ async def test_report_button_does_not_reset_active_fsm(bot_module):
 
 
 @pytest.mark.asyncio
-async def test_report_button_does_not_reset_active_llm_memory(bot_module, monkeypatch):
-    called = False
-    bot_module.chat_history[7] = [{"role": "system", "content": "x"}]
+async def test_report_button_does_not_reset_active_draft(bot_module):
+    bot_module.user_state[7] = bot_module._default_user_state()
     message = FakeMessage(text=bot_module.MAIN_MENU_REPORT_TEXT, user_id=7)
     state = FakeState()
 
-    async def fake_call_deepseek(_user_id):
-        nonlocal called
-        called = True
-        return "Mulai laporan baru"
-
-    monkeypatch.setattr(bot_module, "call_deepseek", fake_call_deepseek)
-
     await bot_module.handle_report_button(message, state)
 
-    assert called is False
-    assert bot_module.chat_history[7] == [{"role": "system", "content": "x"}]
+    assert state.state is None
     assert "masih berjalan" in message.answers[0]["text"].lower()
 
 
 @pytest.mark.asyncio
-async def test_idle_text_prompts_main_menu_instead_of_starting_llm(bot_module, monkeypatch):
-    called = False
+async def test_idle_text_prompts_main_menu(bot_module):
     message = FakeMessage(text="Ada sampah menumpuk", user_id=7)
     state = FakeState()
 
-    async def fake_call_deepseek(_user_id):
-        nonlocal called
-        called = True
-        return "Mulai laporan"
+    await bot_module.handle_idle_report_input(message, state)
 
-    monkeypatch.setattr(bot_module, "call_deepseek", fake_call_deepseek)
-
-    await bot_module.handle_text_llm(message, state)
-
-    assert called is False
     assert "tekan tombol" in message.answers[0]["text"].lower()
     assert message.answers[0]["reply_markup"].keyboard[0][0].text == bot_module.MAIN_MENU_REPORT_TEXT
 
 
 @pytest.mark.asyncio
-async def test_contact_updates_existing_reporter_without_phone(
+async def test_contact_updates_existing_reporter_and_enters_fsm(
     bot_module, monkeypatch, immediate_to_thread
 ):
     repo = DummyRepo(reporter={"id": "reporter-1", "phone": "", "name": "Budi"})
     monkeypatch.setattr(bot_module, "get_repo", lambda: repo)
-
-    async def fake_start_llm(message, state, existing):
-        assert existing["phone"] == "081234"
-        await state.set_state("llm-started")
-
-    monkeypatch.setattr(bot_module, "_start_llm_report_flow", fake_start_llm)
     message = FakeMessage(contact=SimpleNamespace(phone_number="081234"))
     state = FakeState(data={"telegram_id": "1", "reporter_name": "Budi"})
 
@@ -126,19 +96,13 @@ async def test_contact_updates_existing_reporter_without_phone(
 
     assert repo.updated_reporters == [("reporter-1", {"phone": "081234"})]
     assert state.data["reporter_phone"] == "081234"
-    assert state.state == "llm-started"
+    assert state.state == bot_module.ReportStates.PILIH_KELURAHAN.state
 
 
 @pytest.mark.asyncio
-async def test_phone_text_is_accepted(bot_module, monkeypatch, immediate_to_thread):
+async def test_phone_text_is_accepted_and_enters_fsm(bot_module, monkeypatch, immediate_to_thread):
     repo = DummyRepo(reporter=None)
     monkeypatch.setattr(bot_module, "get_repo", lambda: repo)
-
-    async def fake_start_llm(message, state, existing):
-        assert existing["phone"] == "08123456789"
-        await state.set_state("llm-started")
-
-    monkeypatch.setattr(bot_module, "_start_llm_report_flow", fake_start_llm)
     message = FakeMessage(text="08123456789")
     state = FakeState(data={"telegram_id": "1", "reporter_name": "Budi"})
 
@@ -146,179 +110,72 @@ async def test_phone_text_is_accepted(bot_module, monkeypatch, immediate_to_thre
 
     assert repo.created_reporters[0]["phone"] == "08123456789"
     assert state.data["reporter_phone"] == "08123456789"
-    assert state.state == "llm-started"
+    assert state.state == bot_module.ReportStates.PILIH_KELURAHAN.state
 
 
 @pytest.mark.asyncio
-async def test_text_llm_timeout_forces_manual_fallback(bot_module, monkeypatch, dummy_bot):
-    message = FakeMessage(text="Ada sampah menumpuk", user_id=5)
-    state = FakeState()
-    bot_module.chat_history[5] = [{"role": "system", "content": "x"}]
-    called = {}
-
-    async def timeout(_user_id):
-        raise bot_module.DeepSeekTimeoutError("timeout")
-
-    async def fake_force_fallback(msg, st):
-        called["message"] = msg
-        await st.set_state("manual")
-
-    monkeypatch.setattr(bot_module, "call_deepseek", timeout)
-    monkeypatch.setattr(bot_module, "_force_fallback", fake_force_fallback)
-
-    await bot_module.handle_text_llm(message, state)
-
-    assert called["message"] is message
-    assert state.state == "manual"
-    assert "gagal memproses" in message.answers[0]["text"]
-
-
-@pytest.mark.asyncio
-async def test_text_llm_marks_photo_declined(bot_module, monkeypatch, dummy_bot):
-    message = FakeMessage(text="tidak ada foto", user_id=12)
-    state = FakeState()
-    bot_module.chat_history[12] = [{"role": "system", "content": "x"}]
-    bot_module.user_state[12] = bot_module._default_user_state()
-
-    async def fake_call_deepseek(user_id):
-        return "Baik, saya lanjutkan tanpa foto."
-
-    monkeypatch.setattr(bot_module, "call_deepseek", fake_call_deepseek)
-
-    await bot_module.handle_text_llm(message, state)
-
-    assert bot_module.user_state[12]["photo_was_asked"] is True
-    assert bot_module.user_state[12]["photo_declined"] is True
-
-
-@pytest.mark.asyncio
-async def test_location_llm_records_gps_and_continues_ai(bot_module, monkeypatch, dummy_bot):
-    message = FakeMessage(location=SimpleNamespace(latitude=-7.8, longitude=110.4), user_id=6)
-    state = FakeState()
-    bot_module.chat_history[6] = [{"role": "system", "content": "x"}]
-    bot_module.user_state[6] = bot_module._default_user_state()
-
-    class FakeResponse:
-        status = 200
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return None
-
-        async def json(self):
-            return {"address": {"suburb": "Kotabaru"}}
-
-    class FakeSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return None
-
-        def get(self, *args, **kwargs):
-            return FakeResponse()
-
-    async def fake_call_deepseek(user_id):
-        return "Ada foto sampahnya?"
-
-    monkeypatch.setattr(bot_module.aiohttp, "ClientSession", lambda: FakeSession())
-    monkeypatch.setattr(bot_module, "call_deepseek", fake_call_deepseek)
-
-    await bot_module.handle_location_llm(message, state)
-
-    assert bot_module.user_state[6]["latitude"] == -7.8
-    assert bot_module.user_state[6]["longitude"] == 110.4
-    assert bot_module.user_state[6]["kelurahan_detected"] == "Kotabaru"
-    assert "Kelurahan Kotabaru" in message.answers[0]["text"]
-    assert message.answers[-1]["text"] == "Ada foto sampahnya?"
-
-
-@pytest.mark.asyncio
-async def test_photo_llm_valid_waste_records_category(bot_module, monkeypatch, dummy_bot):
+async def test_photo_manual_valid_waste_keeps_user_category(bot_module, monkeypatch):
     photo = [SimpleNamespace(file_id="file-1")]
     message = FakeMessage(photo=photo, user_id=8)
-    state = FakeState()
-    bot_module.chat_history[8] = [{"role": "system", "content": "x"}]
-    bot_module.user_state[8] = bot_module._default_user_state()
+    state = FakeState(data={"category": "sampah_liar"})
 
-    class FakeResponse:
-        async def __aenter__(self):
-            return self
+    async def fake_validate(file_id, chat_id):
+        return {
+            "accepted": True,
+            "fallback": False,
+            "suggested_category": "tps_penuh",
+            "ai_data": {"success": True, "isWaste": True},
+        }
 
-        async def __aexit__(self, exc_type, exc, tb):
-            return None
+    monkeypatch.setattr(bot_module, "validate_telegram_photo", fake_validate)
 
-        async def json(self):
-            return {"success": True, "isWaste": True, "suggested_category": "tps_penuh"}
+    await bot_module.handle_photo_manual(message, state)
 
-    class FakeSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return None
-
-        def post(self, *args, **kwargs):
-            self.payload = kwargs["json"]
-            return FakeResponse()
-
-    async def fake_call_deepseek(user_id):
-        return "Lokasinya di mana?"
-
-    monkeypatch.setattr(bot_module.aiohttp, "ClientSession", lambda: FakeSession())
-    monkeypatch.setattr(bot_module, "call_deepseek", fake_call_deepseek)
-
-    await bot_module.handle_photo_llm(message, state)
-
-    assert bot_module.user_state[8]["file_ids"] == ["file-1"]
-    assert bot_module.user_state[8]["suggested_category"] == "tps_penuh"
-    assert bot_module.user_state[8]["photo_received"] is True
-    assert bot_module.user_state[8]["photo_validated_as_waste"] is True
-    assert "Bukti Sampah".lower() in bot_module.chat_history[8][-1]["content"].lower()
-    assert message.answers[0]["text"] == "Lokasinya di mana?"
+    assert state.data["file_ids"] == ["file-1"]
+    assert state.data["category"] == "sampah_liar"
+    assert state.data["suggested_category"] == "tps_penuh"
+    assert state.data["photo_received"] is True
+    assert state.data["photo_validated_as_waste"] is True
+    assert state.state == bot_module.ReportStates.INPUT_DESKRIPSI.state
 
 
 @pytest.mark.asyncio
-async def test_photo_llm_spam_does_not_count_as_received(bot_module, monkeypatch, dummy_bot):
+async def test_photo_manual_non_waste_is_rejected(bot_module, monkeypatch):
     photo = [SimpleNamespace(file_id="file-spam")]
     message = FakeMessage(photo=photo, user_id=9)
     state = FakeState()
-    bot_module.chat_history[9] = [{"role": "system", "content": "x"}]
-    bot_module.user_state[9] = bot_module._default_user_state()
 
-    class FakeResponse:
-        async def __aenter__(self):
-            return self
+    async def fake_validate(file_id, chat_id):
+        return {"accepted": False, "fallback": False, "top_label": "selfie"}
 
-        async def __aexit__(self, exc_type, exc, tb):
-            return None
+    monkeypatch.setattr(bot_module, "validate_telegram_photo", fake_validate)
 
-        async def json(self):
-            return {"success": True, "isWaste": False, "top_label": "selfie"}
+    await bot_module.handle_photo_manual(message, state)
 
-    class FakeSession:
-        async def __aenter__(self):
-            return self
+    assert state.data["file_ids"] == []
+    assert state.data["photo_received"] is False
+    assert state.state is None
+    assert "belum terdeteksi" in message.answers[0]["text"].lower()
 
-        async def __aexit__(self, exc_type, exc, tb):
-            return None
 
-        def post(self, *args, **kwargs):
-            return FakeResponse()
+@pytest.mark.asyncio
+async def test_photo_manual_validation_error_accepts_fallback(bot_module, monkeypatch):
+    photo = [SimpleNamespace(file_id="file-1")]
+    message = FakeMessage(photo=photo, user_id=9)
+    state = FakeState()
 
-    async def fake_call_deepseek(user_id):
-        return "Foto itu belum terlihat seperti sampah. Bisa kirim foto tumpukan sampah?"
+    async def fake_validate(file_id, chat_id):
+        return {"accepted": True, "fallback": True, "ai_data": {}}
 
-    monkeypatch.setattr(bot_module.aiohttp, "ClientSession", lambda: FakeSession())
-    monkeypatch.setattr(bot_module, "call_deepseek", fake_call_deepseek)
+    monkeypatch.setattr(bot_module, "validate_telegram_photo", fake_validate)
 
-    await bot_module.handle_photo_llm(message, state)
+    await bot_module.handle_photo_manual(message, state)
 
-    assert bot_module.user_state[9]["file_ids"] == []
-    assert bot_module.user_state[9]["photo_was_asked"] is True
-    assert bot_module.user_state[9]["photo_received"] is False
+    assert state.data["file_ids"] == ["file-1"]
+    assert state.data["photo_received"] is True
+    assert state.data["photo_validated_as_waste"] is False
+    assert "tetap diterima" in message.answers[0]["text"].lower()
+    assert state.state == bot_module.ReportStates.INPUT_DESKRIPSI.state
 
 
 @pytest.mark.asyncio
@@ -329,6 +186,7 @@ async def test_manual_photo_skip_and_required_location(bot_module):
     await bot_module.handle_photo_skip(skip_message, state)
 
     assert state.data["file_ids"] == []
+    assert state.data["photo_declined"] is True
     assert state.state == bot_module.ReportStates.INPUT_DESKRIPSI.state
 
     state = FakeState(data={"file_ids": []}, state=bot_module.ReportStates.SHARE_LOCATION.state)
