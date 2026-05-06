@@ -22,7 +22,7 @@ jobs:
           script: |
             set -e
 
-            cd /home/ubuntu/services/telegram_bot
+            cd /home/ubuntu
 
             echo "== Before sync =="
             git status --short || true
@@ -37,12 +37,13 @@ jobs:
             git rev-parse HEAD
 
             echo "== Check DeepSeek removal from runtime =="
-            if grep -R -E "DEEPSEEK|AsyncOpenAI|call_deepseek|from openai|import openai" -n app domain repositories requirements.txt run_bot.py; then
+            if grep -R -E "DEEPSEEK|AsyncOpenAI|call_deepseek|from openai|import openai" -n services/telegram_bot/app services/telegram_bot/domain services/telegram_bot/repositories services/telegram_bot/requirements.txt services/telegram_bot/run_bot.py; then
               echo "DeepSeek/OpenAI runtime code still found. Refusing to deploy."
               exit 1
             fi
 
             echo "== Install dependencies =="
+            cd services/telegram_bot
             source venv/bin/activate
             pip install -r requirements.txt
 
