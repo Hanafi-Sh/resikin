@@ -22,32 +22,41 @@ jobs:
           script: |
             set -e
 
-            cd /home/ubuntu
+            BOT_DIR="/home/ubuntu/services/telegram_bot"
 
-            echo "== Before sync =="
-            git status --short || true
-            git log -1 --oneline || true
+            echo "== Locate git repository =="
+            REPO_DIR="$(find /home/ubuntu -maxdepth 5 -type d -name .git -exec dirname {} \; | while read -r dir; do
+              if [ -d "$dir/services/telegram_bot" ]; then
+                echo "$dir"
+                break
+              fi
+            done)"
 
-            echo "== Force sync to origin/main =="
-            git fetch origin main
-            git reset --hard origin/main
+            if [ -n "$REPO_DIR" ]; then
+              cd "$REPO_DIR"
 
-            echo "== Deployed commit =="
-            git log -1 --oneline
-            git rev-parse HEAD
+              echo "== Before sync =="
+              git status --short || true
+              git log -1 --oneline || true
 
-            echo "== Check DeepSeek removal from runtime =="
-            if grep -R -E "DEEPSEEK|AsyncOpenAI|call_deepseek|from openai|import openai" -n services/telegram_bot/app services/telegram_bot/domain services/telegram_bot/repositories services/telegram_bot/requirements.txt services/telegram_bot/run_bot.py; then
+              echo "== Force sync to origin/main =="
+              git fetch origin main
+              git reset --hard origin/main
+
+              echo "== Synced commit =="
+              git log -1 --oneline
+              git rev-parse HEAD
+            else
+              echo "No git repository containing services/telegram_bot found under /home/ubuntu."
+              echo "Falling back to the VPS deploy script."
+            fi
+
+            echo "== Run VPS deploy script =="
+            /home/ubuntu/deploy-resikin-bot.sh
+
+            echo "== Verify runtime DeepSeek removal =="
+            cd "$BOT_DIR"
+            if grep -R -E "DEEPSEEK|AsyncOpenAI|call_deepseek|from openai|import openai" -n app domain repositories requirements.txt run_bot.py; then
               echo "DeepSeek/OpenAI runtime code still found. Refusing to deploy."
               exit 1
             fi
-
-            echo "== Install dependencies =="
-            cd services/telegram_bot
-            source venv/bin/activate
-            pip install -r requirements.txt
-
-            echo "== Restart service =="
-            sudo systemctl daemon-reload
-            sudo systemctl restart resikin-bot
-            sudo systemctl status resikin-bot --no-pager
