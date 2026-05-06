@@ -1,54 +1,52 @@
 name: Deploy Telegram Bot
 
-  on:
-    push:
-      branches:
-        - main
-    workflow_dispatch:
+'on':
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
-  jobs:
-    deploy-bot:
-      runs-on: ubuntu-latest
+jobs:
+  deploy-bot:
+    runs-on: ubuntu-latest
 
-      steps:
-        - name: Deploy bot to VPS
-          uses: appleboy/ssh-action@v1.0.3
-          with:
-            host: ${{ secrets.VPS_HOST }}
-            username: ${{ secrets.VPS_USER }}
-            key: ${{ secrets.VPS_SSH_KEY }}
-            port: ${{ secrets.VPS_PORT || 22 }}
-            command_timeout: 10m
-            script: |
-              set -e
+    steps:
+      - name: Deploy bot to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          command_timeout: 10m
+          script: |
+            set -e
 
-              cd /home/ubuntu/services/telegram_bot
+            cd /home/ubuntu/services/telegram_bot
 
-              echo "== Before sync =="
-              git status --short || true
-              git log -1 --oneline || true
+            echo "== Before sync =="
+            git status --short || true
+            git log -1 --oneline || true
 
-              echo "== Force sync to origin/main =="
-              git fetch origin main
-              git reset --hard origin/main
+            echo "== Force sync to origin/main =="
+            git fetch origin main
+            git reset --hard origin/main
 
-              echo "== Deployed commit =="
-              git log -1 --oneline
-              git rev-parse HEAD
+            echo "== Deployed commit =="
+            git log -1 --oneline
+            git rev-parse HEAD
 
-              echo "== Check DeepSeek removal =="
-              if grep -R "DeepSeek\|DEEPSEEK\|AsyncOpenAI\|
-  call_deepseek\|from openai\|import openai" -n .; then
-                echo "DeepSeek/OpenAI code still found. Refusing
-  to deploy."
-                exit 1
-              fi
+            echo "== Check DeepSeek removal from runtime =="
+            if grep -R -E "DEEPSEEK|AsyncOpenAI|call_deepseek|from openai|import openai" -n app domain repositories requirements.txt run_bot.py; then
+              echo "DeepSeek/OpenAI runtime code still found. Refusing to deploy."
+              exit 1
+            fi
 
-              echo "== Install dependencies =="
-              source venv/bin/activate
-              pip install -r requirements.txt
+            echo "== Install dependencies =="
+            source venv/bin/activate
+            pip install -r requirements.txt
 
-              echo "== Restart service =="
-              sudo systemctl daemon-reload
-              sudo systemctl restart resikin-bot
-              sudo systemctl status resikin-bot --no-pager
+            echo "== Restart service =="
+            sudo systemctl daemon-reload
+            sudo systemctl restart resikin-bot
+            sudo systemctl status resikin-bot --no-pager
