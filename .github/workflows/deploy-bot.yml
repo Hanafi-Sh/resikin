@@ -72,8 +72,14 @@ jobs:
             /home/ubuntu/deploy-resikin-bot.sh
 
             echo "== Show systemd unit =="
-            systemctl cat resikin-bot.service || true
-            systemctl show -p WorkingDirectory resikin-bot.service || true
+            if sudo -n true 2>/dev/null; then
+              sudo -n systemctl cat resikin-bot.service || true
+              sudo -n systemctl show -p WorkingDirectory resikin-bot.service || true
+            else
+              systemctl cat resikin-bot.service || true
+              systemctl show -p WorkingDirectory resikin-bot.service || true
+              echo "No passwordless sudo; privileged systemd commands may be skipped."
+            fi
 
             echo "== Validate .env and token =="
             if [ ! -f "$BOT_DIR/.env" ]; then
@@ -90,10 +96,15 @@ jobs:
             curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook?drop_pending_updates=true" >/dev/null
 
             echo "== Restart bot and show logs =="
-            systemctl restart resikin-bot.service
-            sleep 2
-            systemctl status resikin-bot.service --no-pager || true
-            journalctl -u resikin-bot.service -n 200 --no-pager || true
+            if sudo -n true 2>/dev/null; then
+              sudo -n systemctl restart resikin-bot.service
+              sleep 2
+              sudo -n systemctl status resikin-bot.service --no-pager || true
+              sudo -n journalctl -u resikin-bot.service -n 200 --no-pager || true
+            else
+              echo "No passwordless sudo; skipping restart/journalctl."
+              systemctl status resikin-bot.service --no-pager || true
+            fi
 
             echo "== Verify runtime DeepSeek removal =="
             cd "$BOT_DIR"
