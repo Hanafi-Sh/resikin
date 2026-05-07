@@ -13,6 +13,7 @@ import ReportPhotoGallery from '@/components/ui/ReportPhotoGallery';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { cn, formatDateTime } from '@/lib/utils';
 import { REPORT_STATUS_LABELS, REPORT_CATEGORY_LABELS, REPORT_STATUS } from '@/lib/constants';
+import { fetchWithAuthRetry } from '@/lib/auth-fetch';
 
 const PETUGAS_ACTIONS = [
   { status: 'dalam_proses', label: 'Menuju / Sedang Dikerjakan', icon: Truck, notes: 'Petugas menuju lokasi' },
@@ -30,7 +31,7 @@ export default function TugasDetailPage({ params }) {
 
   const fetchAssignment = useCallback(async () => {
     try {
-      const res = await fetch('/api/assignments');
+      const res = await fetchWithAuthRetry('/api/assignments');
       if (res.status === 401) { router.push('/login'); return; }
       const data = await res.json();
       const found = (data.assignments || []).find(a => a.id === id);

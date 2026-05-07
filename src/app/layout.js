@@ -1,4 +1,3 @@
-import { Geist, Geist_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
@@ -6,16 +5,6 @@ import Footer from "@/components/layout/Footer";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { THEME_COOKIE_NAME, isTheme } from "@/lib/theme.mjs";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata = {
   title: "ResikIn — Sistem Pelaporan Sampah Kelurahan",
@@ -78,7 +67,7 @@ export default async function RootLayout({ children }) {
   return (
     <html
       lang="id"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased ${initialTheme}`}
+      className={`h-full antialiased ${initialTheme}`}
       data-theme={initialTheme}
       suppressHydrationWarning
     >

@@ -12,6 +12,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { cn, formatDateTime, getRelativeTime } from '@/lib/utils';
 import { REPORT_CATEGORY_LABELS } from '@/lib/constants';
 import TelegramLinkCard from '@/components/ui/TelegramLinkCard';
+import { fetchWithAuthRetry } from '@/lib/auth-fetch';
 
 export default function PetugasPage() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function PetugasPage() {
   const fetchAssignments = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/assignments');
+      const res = await fetchWithAuthRetry('/api/assignments');
       if (res.status === 401) { router.push('/login'); return; }
       const data = await res.json();
       setAssignments(data.assignments || []);
