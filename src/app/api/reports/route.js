@@ -2,6 +2,14 @@ import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { withReportGalleryList } from '@/lib/report-gallery';
 import { REPORT_NOTIFICATION_EVENTS, buildReportNotificationPayload } from '@/lib/report-notifications.mjs';
+import {
+  hasActionableReportLocation,
+  normalizeIndonesianPhone,
+  normalizeManualAddress,
+  normalizeReporterName,
+  normalizeReportDescription,
+} from '@/lib/utils';
+import { KELURAHAN_IDS, REPORT_CATEGORIES } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,7 +81,7 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { reporter_name, reporter_phone, category, description, latitude, longitude, address, photo_urls } = body;
+    const { reporter_name, reporter_phone, category, description, latitude, longitude, address, kelurahan_id, photo_urls } = body;
 
     // Validation
     if (!reporter_name || !reporter_phone || !category || !description) {
@@ -83,15 +91,63 @@ export async function POST(request) {
       );
     }
 
+    const normalizedName = normalizeReporterName(reporter_name);
+    if (!normalizedName) {
+      return NextResponse.json(
+        { error: 'Nama pelapor harus 2-80 karakter dan mengandung huruf' },
+        { status: 400 }
+      );
+    }
+
+    const normalizedPhone = normalizeIndonesianPhone(reporter_phone);
+    if (!normalizedPhone) {
+      return NextResponse.json(
+        { error: 'Nomor HP harus nomor Indonesia yang valid' },
+        { status: 400 }
+      );
+    }
+
+    const normalizedDescription = normalizeReportDescription(description);
+    if (!normalizedDescription) {
+      return NextResponse.json(
+        { error: 'Deskripsi minimal 20 karakter dan harus menjelaskan masalah dengan jelas' },
+        { status: 400 }
+      );
+    }
+
+    const validCategoryIds = new Set(REPORT_CATEGORIES.map((item) => item.value));
+    if (!validCategoryIds.has(category)) {
+      return NextResponse.json(
+        { error: 'Kategori laporan tidak valid' },
+        { status: 400 }
+      );
+    }
+
+    const normalizedAddress = normalizeManualAddress(address);
+    if (!hasActionableReportLocation({ latitude, longitude, address })) {
+      return NextResponse.json(
+        { error: 'Lokasi wajib diisi melalui GPS atau alamat manual yang jelas' },
+        { status: 400 }
+      );
+    }
+
+    if (!KELURAHAN_IDS.has(kelurahan_id)) {
+      return NextResponse.json(
+        { error: 'Kelurahan lokasi masalah wajib dipilih' },
+        { status: 400 }
+      );
+    }
+
     const { data: report, error: reportError } = await supabase
       .rpc('create_report_intake', {
-        p_reporter_name: reporter_name,
-        p_reporter_phone: reporter_phone,
+        p_reporter_name: normalizedName,
+        p_reporter_phone: normalizedPhone,
         p_category: category,
-        p_description: description,
+        p_description: normalizedDescription,
         p_latitude: latitude || null,
         p_longitude: longitude || null,
-        p_address: address || null,
+        p_address: normalizedAddress || address || null,
+        p_kelurahan_id: kelurahan_id,
         p_photo_urls: Array.isArray(photo_urls) ? photo_urls : [],
         p_source: 'web',
         p_status_history_notes: 'Laporan dibuat oleh warga',

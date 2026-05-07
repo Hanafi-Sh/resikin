@@ -76,15 +76,94 @@ export function truncate(str, maxLength = 100) {
  * Validate Indonesian phone number
  */
 export function isValidPhone(phone) {
-  const cleaned = phone.replace(/\D/g, '');
-  return /^(08|628)\d{8,12}$/.test(cleaned);
+  return normalizeIndonesianPhone(phone) !== null;
+}
+
+/**
+ * Normalize Indonesian mobile phone number to E.164-like +62 format.
+ */
+export function normalizeIndonesianPhone(phone) {
+  if (typeof phone !== 'string') return null;
+
+  const trimmed = phone.trim();
+  if (!trimmed || /[A-Za-z]/.test(trimmed)) return null;
+  if (!/^\+?[\d\s().-]+$/.test(trimmed)) return null;
+
+  let digits = trimmed.replace(/\D/g, '');
+  if (digits.startsWith('00')) {
+    digits = digits.slice(2);
+  }
+  if (digits.startsWith('0')) {
+    digits = `62${digits.slice(1)}`;
+  }
+
+  if (!/^628\d{8,11}$/.test(digits)) return null;
+
+  return `+${digits}`;
+}
+
+/**
+ * A report has an actionable location when it has GPS coordinates or a manual address.
+ */
+export function hasActionableReportLocation({ latitude, longitude, address } = {}) {
+  const hasLatitude = latitude !== null && latitude !== undefined && latitude !== '';
+  const hasLongitude = longitude !== null && longitude !== undefined && longitude !== '';
+  const hasCoordinates = hasLatitude && hasLongitude && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude));
+  const normalizedAddress = normalizeManualAddress(address);
+  const hasManualAddress = normalizedAddress !== null;
+  return hasCoordinates || hasManualAddress;
+}
+
+/**
+ * Normalize manual report addresses while rejecting vague values.
+ */
+export function normalizeManualAddress(address) {
+  if (typeof address !== 'string') return null;
+
+  const normalized = address.trim().replace(/\s+/g, ' ');
+  if (normalized.length < 10 || normalized.length > 250) return null;
+  if (!/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(normalized)) return null;
+
+  return normalized;
+}
+
+/**
+ * Normalize reporter names while rejecting values that are not plausibly names.
+ */
+export function normalizeReporterName(name) {
+  if (typeof name !== 'string') return null;
+
+  const normalized = name.trim().replace(/\s+/g, ' ');
+  if (normalized.length < 2 || normalized.length > 80) return null;
+  if (!/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(normalized)) return null;
+  if (!/^[A-Za-zÀ-ÖØ-öø-ÿ\s.'-]+$/.test(normalized)) return null;
+
+  return normalized;
+}
+
+/**
+ * Normalize report descriptions while rejecting unhelpful values.
+ */
+export function normalizeReportDescription(description) {
+  if (typeof description !== 'string') return null;
+
+  const normalized = description.trim().replace(/\s+/g, ' ');
+  if (normalized.length < 20 || normalized.length > 1000) return null;
+  if (!/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(normalized)) return null;
+
+  return normalized;
 }
 
 /**
  * Format phone number for display
  */
 export function formatPhone(phone) {
-  const cleaned = phone.replace(/\D/g, '');
+  const normalized = normalizeIndonesianPhone(phone);
+  if (normalized) {
+    return `0${normalized.slice(3)}`;
+  }
+
+  const cleaned = String(phone || '').replace(/\D/g, '');
   if (cleaned.startsWith('62')) {
     return '0' + cleaned.slice(2);
   }

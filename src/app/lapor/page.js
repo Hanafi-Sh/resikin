@@ -8,8 +8,15 @@ import {
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
-import { cn } from '@/lib/utils';
-import { REPORT_CATEGORIES, APP_CONFIG } from '@/lib/constants';
+import {
+  cn,
+  hasActionableReportLocation,
+  normalizeIndonesianPhone,
+  normalizeManualAddress,
+  normalizeReporterName,
+  normalizeReportDescription,
+} from '@/lib/utils';
+import { REPORT_CATEGORIES, APP_CONFIG, KELURAHAN_OPTIONS } from '@/lib/constants';
 
 const STEPS = ['Foto & Detail', 'Kategori', 'Lokasi', 'Kirim'];
 
@@ -40,6 +47,7 @@ export default function LaporPage() {
     latitude: null,
     longitude: null,
     address: '',
+    kelurahan_id: '',
   });
 
   const [errors, setErrors] = useState({});
@@ -47,6 +55,11 @@ export default function LaporPage() {
   const updateField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setErrors(prev => ({ ...prev, [field]: '' }));
+  };
+
+  const updatePhoneField = (value) => {
+    const sanitized = value.replace(/[^\d+\s().-]/g, '');
+    updateField('reporter_phone', sanitized);
   };
 
   // Photo upload handler
@@ -177,16 +190,57 @@ export default function LaporPage() {
       newErrors.category = 'Pilih kategori masalah';
     }
 
+    if (step === 2 && !hasActionableReportLocation(formData)) {
+      newErrors.location = 'Tentukan lokasi GPS atau isi alamat manual yang jelas';
+    }
+    if (step === 2 && !formData.kelurahan_id) {
+      newErrors.kelurahan_id = 'Pilih kelurahan lokasi masalah';
+    }
+
     if (step === 0) {
-      if (!formData.description || formData.description.trim().length < 10) {
-        newErrors.description = 'Deskripsi minimal 10 karakter';
+      if (!normalizeReportDescription(formData.description)) {
+        newErrors.description = 'Deskripsi minimal 20 karakter dan harus menjelaskan masalah dengan jelas';
       }
-      if (!formData.reporter_name || formData.reporter_name.trim().length < 2) {
-        newErrors.reporter_name = 'Nama wajib diisi';
+      if (!normalizeReporterName(formData.reporter_name)) {
+        newErrors.reporter_name = 'Nama harus 2-80 karakter dan mengandung huruf';
       }
-      if (!formData.reporter_phone || formData.reporter_phone.trim().length < 10) {
-        newErrors.reporter_phone = 'Nomor HP tidak valid';
+      if (!normalizeIndonesianPhone(formData.reporter_phone)) {
+        newErrors.reporter_phone = 'Nomor HP harus nomor Indonesia yang valid, contoh 08123456789';
       }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateAllSteps = () => {
+    const newErrors = {};
+
+    if (!normalizeReportDescription(formData.description)) {
+      newErrors.description = 'Deskripsi minimal 20 karakter dan harus menjelaskan masalah dengan jelas';
+    }
+    if (!normalizeReporterName(formData.reporter_name)) {
+      newErrors.reporter_name = 'Nama harus 2-80 karakter dan mengandung huruf';
+    }
+    if (!normalizeIndonesianPhone(formData.reporter_phone)) {
+      newErrors.reporter_phone = 'Nomor HP harus nomor Indonesia yang valid, contoh 08123456789';
+    }
+    if (!formData.category) {
+      newErrors.category = 'Pilih kategori masalah';
+    }
+    if (!hasActionableReportLocation(formData)) {
+      newErrors.location = 'Tentukan lokasi GPS atau isi alamat manual yang jelas';
+    }
+    if (!formData.kelurahan_id) {
+      newErrors.kelurahan_id = 'Pilih kelurahan lokasi masalah';
+    }
+
+    if (newErrors.description || newErrors.reporter_name || newErrors.reporter_phone) {
+      setStep(0);
+    } else if (newErrors.category) {
+      setStep(1);
+    } else if (newErrors.location || newErrors.kelurahan_id) {
+      setStep(2);
     }
 
     setErrors(newErrors);
@@ -203,22 +257,34 @@ export default function LaporPage() {
 
   // Submit handler
   const handleSubmit = async () => {
-    if (!validateStep()) return;
+    if (!validateAllSteps()) return;
     setLoading(true);
 
     try {
+      const normalizedPhone = normalizeIndonesianPhone(formData.reporter_phone);
+      const normalizedName = normalizeReporterName(formData.reporter_name);
+      const normalizedDescription = normalizeReportDescription(formData.description);
+      const normalizedAddress = normalizeManualAddress(formData.address);
+
       // Upload photos first
       const uploadedUrls = [];
-      for (const photo of formData.photos) {
+      for (const [index, photo] of formData.photos.entries()) {
         const uploadForm = new FormData();
         uploadForm.append('file', photo.file);
 
         const uploadRes = await fetch('/api/upload', { method: 'POST', body: uploadForm });
         const uploadData = await uploadRes.json();
 
-        if (uploadData.success) {
-          uploadedUrls.push(uploadData.url);
+        if (!uploadRes.ok || !uploadData.success || !uploadData.url) {
+          setErrors({
+            photos: uploadData.error || `Foto ke-${index + 1} gagal diunggah. Data laporan Anda tetap tersimpan di form.`,
+          });
+          setStep(0);
+          setLoading(false);
+          return;
         }
+
+        uploadedUrls.push(uploadData.url);
       }
 
       // Submit report
@@ -226,13 +292,14 @@ export default function LaporPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          reporter_name: formData.reporter_name,
-          reporter_phone: formData.reporter_phone,
+          reporter_name: normalizedName,
+          reporter_phone: normalizedPhone,
           category: formData.category,
-          description: formData.description,
+          description: normalizedDescription,
           latitude: formData.latitude,
           longitude: formData.longitude,
-          address: formData.address,
+          address: normalizedAddress || formData.address,
+          kelurahan_id: formData.kelurahan_id,
           photo_urls: uploadedUrls,
         }),
       });
@@ -403,7 +470,9 @@ export default function LaporPage() {
                 <input
                   type="tel"
                   value={formData.reporter_phone}
-                  onChange={(e) => updateField('reporter_phone', e.target.value)}
+                  onChange={(e) => updatePhoneField(e.target.value)}
+                  inputMode="tel"
+                  autoComplete="tel"
                   placeholder="Contoh: 08123456789"
                   className="w-full px-4 py-3 rounded-xl border border-border text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
                 />
@@ -479,7 +548,29 @@ export default function LaporPage() {
           {step === 2 && (
             <div className="space-y-5 animate-fade-in">
               <h2 className="text-lg font-bold text-foreground mb-1">Lokasi Masalah</h2>
-              <p className="text-sm text-muted-foreground mb-4">Tentukan lokasi masalah sampah</p>
+              <p className="text-sm text-muted-foreground mb-4">Pilih kelurahan dan tentukan lokasi masalah sampah</p>
+
+              <div>
+                <label className="block text-sm font-semibold text-secondary-foreground mb-1.5">
+                  Kelurahan Lokasi Masalah *
+                </label>
+                <select
+                  value={formData.kelurahan_id}
+                  onChange={(e) => updateField('kelurahan_id', e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-border bg-card text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                >
+                  <option value="">Pilih kelurahan</option>
+                  {KELURAHAN_OPTIONS.map((kelurahan) => (
+                    <option key={kelurahan.id} value={kelurahan.id}>
+                      {kelurahan.name} - {kelurahan.kemantren}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Pilihan ini membantu mengarahkan laporan ke koordinator kelurahan yang tepat.
+                </p>
+                {errors.kelurahan_id && <p className="text-xs text-rose-500 mt-1">{errors.kelurahan_id}</p>}
+              </div>
 
               {formData.latitude && formData.longitude ? (
                 <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl p-5">
@@ -574,10 +665,13 @@ export default function LaporPage() {
                   </div>
                 )}
 
-                {formData.address && (
+                {formData.kelurahan_id && (
                   <div className="bg-muted rounded-xl p-4">
                     <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Lokasi</p>
-                    <p className="text-sm text-secondary-foreground">{formData.address}</p>
+                    <p className="text-sm font-semibold text-foreground mb-1">
+                      {KELURAHAN_OPTIONS.find((kelurahan) => kelurahan.id === formData.kelurahan_id)?.name}
+                    </p>
+                    {formData.address && <p className="text-sm text-secondary-foreground">{formData.address}</p>}
                   </div>
                 )}
               </div>
