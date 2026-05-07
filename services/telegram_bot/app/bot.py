@@ -29,6 +29,7 @@ from domain.report_draft import (
     normalize_category,
     normalize_lookup_key,
     user_state,
+    validate_report_readiness,
 )
 from typing import TYPE_CHECKING, Dict, List, Any, Optional
 
@@ -111,14 +112,17 @@ class AntiSpamMiddleware(BaseMiddleware):
         now_ts = datetime.now(timezone.utc).timestamp()
 
         is_entrypoint = is_entrypoint_message(event)
+        is_structured_input = isinstance(event, Message) and bool(event.photo or event.location or event.contact)
 
         # 1. Cooldown 2 seconds. Entrypoint actions must stay responsive because
         # users often press Telegram's Start and the report button back-to-back.
+        # Telegram albums arrive as several photo messages in quick succession,
+        # so structured report inputs must not be dropped by text flood control.
         last_time = self.last_msg_time.get(user_id, 0)
-        if not is_entrypoint and now_ts - last_time < 2.0:
+        if not is_entrypoint and not is_structured_input and now_ts - last_time < 2.0:
             return # Ignore flood
 
-        if not is_entrypoint:
+        if not is_entrypoint and not is_structured_input:
             self.last_msg_time[user_id] = now_ts
 
         text_length = 0
@@ -162,6 +166,10 @@ _mark_photo_asked_from_text = mark_photo_asked_from_text
 _missing_field_prompt = missing_field_prompt
 
 
+def _valid_description(text: Optional[str]) -> bool:
+    return len((text or "").strip()) >= 10
+
+
 async def _ask_for_missing_fields(user_id: int, message: Message, state: FSMContext, missing_fields: List[str]) -> None:
     prompt = _missing_field_prompt(missing_fields)
     if missing_fields and missing_fields[0] == "kelurahan_id":
@@ -188,6 +196,14 @@ async def _ask_for_missing_fields(user_id: int, message: Message, state: FSMCont
             resize_keyboard=True,
         )
     await message.answer(prompt, reply_markup=loc_kb)
+    if state is not None:
+        first_missing = missing_fields[0] if missing_fields else ""
+        if first_missing == "description":
+            await state.set_state(ReportStates.INPUT_DESKRIPSI)
+        elif first_missing == "location":
+            await state.set_state(ReportStates.SHARE_LOCATION)
+        elif first_missing == "photo":
+            await state.set_state(ReportStates.UPLOAD_FOTO)
 
 def get_repo() -> "SupabaseRepo":
     global _repo
@@ -652,9 +668,51 @@ async def handle_photo_manual(message: Message, state: FSMContext):
     task = asyncio.create_task(finalize_group())
     _media_group_tasks[mg_id] = task
 
+@router.message(StateFilter(ReportStates.INPUT_DESKRIPSI), F.photo)
+async def handle_additional_photo_before_description(message: Message, state: FSMContext):
+    state_data = await state.get_data()
+    existing_ids = list(state_data.get("file_ids") or [])
+    if len(existing_ids) >= MAX_PHOTOS:
+        await message.answer(
+            f"⚠️ Maksimal {MAX_PHOTOS} foto per laporan sudah tercapai. Silakan ketik deskripsi laporan."
+        )
+        return
+
+    file_id = message.photo[-1].file_id
+    accepted_ids, rejected_count, used_fallback, _ = await _collect_valid_photo_ids([file_id], message, state)
+    if not accepted_ids:
+        await message.answer(
+            "Foto tambahan belum terdeteksi sebagai bukti sampah dan tidak disimpan. Silakan ketik deskripsi laporan."
+        )
+        return
+
+    updated_data = await state.get_data()
+    total = len(updated_data.get("file_ids") or [])
+    suffix = " Sistem validasi foto sedang tidak tersedia, jadi foto tetap diterima." if used_fallback else ""
+    if rejected_count:
+        suffix += f" {rejected_count} foto tidak disimpan."
+    await message.answer(
+        f"✅ {len(accepted_ids)} foto tambahan diterima. Total foto: {total}.{suffix} Silakan ketik deskripsi laporan."
+    )
+    await state.set_state(ReportStates.INPUT_DESKRIPSI)
+
 @router.message(StateFilter(ReportStates.INPUT_DESKRIPSI))
 async def handle_description(message: Message, state: FSMContext):
-    await state.update_data(description=message.text)
+    description = (message.text or "").strip()
+    if not description:
+        await message.answer("Silakan ketik deskripsi laporan dalam bentuk teks.")
+        return
+
+    if not _valid_description(description):
+        await message.answer(
+            "Deskripsi laporan minimal 10 karakter. Contoh: sampah menumpuk di dekat pasar."
+        )
+        return
+
+    await state.update_data(description=description)
+    draft = ensure_user_state(message.from_user.id)
+    draft["description"] = description
+
     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
     loc_kb = ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="📍 Bagikan Lokasi Saat Ini", request_location=True)]],
@@ -713,6 +771,14 @@ async def handle_confirm_manual(call: CallbackQuery, state: FSMContext):
         return
 
     data = await state.get_data()
+    draft = ensure_user_state(call.from_user.id)
+    draft.update(data)
+    missing_fields = validate_report_readiness(call.from_user.id)
+    if missing_fields:
+        await _ask_for_missing_fields(call.from_user.id, call.message, state, missing_fields)
+        await call.answer()
+        return
+
     report_model = Report(
         user_id=str(call.from_user.id),
         reporter_id=data.get("reporter_id"),
@@ -755,7 +821,11 @@ async def handle_confirm_manual(call: CallbackQuery, state: FSMContext):
             await _notify_koordinator_for_report(inserted_row)
     except Exception:
         logger.exception("Gagal menyimpan laporan")
-        await call.message.answer("Terjadi kesalahan saat menyimpan laporan. Silakan coba lagi nanti.")
-    finally:
-        await state.clear()
+        await call.message.answer(
+            "Terjadi kesalahan saat menyimpan laporan. Draft Anda belum dihapus. Silakan cek data lalu tekan konfirmasi lagi."
+        )
         await call.answer()
+        return
+
+    await state.clear()
+    await call.answer()

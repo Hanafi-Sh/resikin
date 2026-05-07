@@ -18,6 +18,26 @@ def make_message(text="halo", user_id=1):
     )
 
 
+def make_photo_message(user_id=1, media_group_id="album-1"):
+    return Message.model_validate(
+        {
+            "message_id": 1,
+            "date": 0,
+            "chat": {"id": user_id, "type": "private"},
+            "from": {"id": user_id, "is_bot": False, "first_name": "Test"},
+            "media_group_id": media_group_id,
+            "photo": [
+                {
+                    "file_id": "file-1",
+                    "file_unique_id": "unique-1",
+                    "width": 100,
+                    "height": 100,
+                }
+            ],
+        }
+    )
+
+
 @pytest.mark.asyncio
 async def test_antispam_ignores_second_message_inside_cooldown(bot_module):
     middleware = bot_module.AntiSpamMiddleware()
@@ -34,6 +54,23 @@ async def test_antispam_ignores_second_message_inside_cooldown(bot_module):
 
     assert result is None
     assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_antispam_allows_album_photos_inside_cooldown(bot_module):
+    middleware = bot_module.AntiSpamMiddleware()
+    event = make_photo_message()
+    calls = 0
+
+    async def handler(_event, _data):
+        nonlocal calls
+        calls += 1
+        return "ok"
+
+    await middleware(handler, event, {"state": FakeState()})
+    await middleware(handler, event, {"state": FakeState()})
+
+    assert calls == 2
 
 
 @pytest.mark.asyncio
