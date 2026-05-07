@@ -15,13 +15,9 @@ import {
   Sparkles,
   TrendingUp,
   Leaf,
-  Bot,
-  MessageCircle,
-  Smartphone,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
-import { APP_CONFIG } from '@/lib/constants';
 
 // Stat data (placeholder — will be dynamic later)
 const stats = [
@@ -304,7 +300,7 @@ export default function HomePage() {
                     </div>
                   )}
 
-                  <Card hover className="text-center p-8 relative overflow-hidden group-hover:border-emerald-200 dark:border-emerald-500/30 transition-colors">
+                  <Card hover className="text-center p-8 relative h-60 overflow-hidden group-hover:border-emerald-200 dark:border-emerald-500/30 transition-colors">
                     {/* Step number watermark */}
                     <span className="absolute top-4 left-6 text-3xl font-black select-none">
                       {item.step}
@@ -320,82 +316,6 @@ export default function HomePage() {
                 </div>
               );
             })}
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================
-          TELEGRAM INTAKE
-          ============================================ */}
-      <section className="py-24 bg-background" id="telegram">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center">
-            <div>
-              <span className="inline-flex items-center gap-2 text-lg font-semibold text-emerald-600 uppercase tracking-wider">
-                <Bot className="w-5 h-5" />
-                Bot Telegram
-              </span>
-              <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-foreground">
-                Laporkan Sampah lewat <span className="text-gradient">@{APP_CONFIG.telegramBotUsername}</span>
-              </h2>
-              <p className="mt-5 text-lg text-muted-foreground leading-relaxed">
-                ResikIn juga menerima laporan melalui Telegram. Warga dapat mengirim Draf Laporan lewat bot,
-                lalu laporan yang sudah dikonfirmasi masuk ke sistem kelurahan untuk diteruskan ke petugas DLH.
-              </p>
-
-              <div className="mt-8 flex flex-wrap gap-4">
-                <a
-                  href={APP_CONFIG.telegramBotUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-emerald-600/20 transition-all duration-200 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-background active:scale-[0.98]"
-                >
-                  Buka @{APP_CONFIG.telegramBotUsername}
-                  <ArrowRight className="w-5 h-5" />
-                </a>
-                <Link href="/telegram">
-                  <Button variant="outline" size="xl">
-                    Lihat Panduan
-                  </Button>
-                </Link>
-              </div>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-4">
-              {[
-                {
-                  title: 'Tanpa membuka website',
-                  description: 'Mulai laporan langsung dari chat Telegram yang sudah familiar.',
-                  icon: MessageCircle,
-                },
-                {
-                  title: 'Tetap masuk sistem',
-                  description: 'Laporan yang dikonfirmasi menjadi Laporan Terkirim di ResikIn.',
-                  icon: ClipboardList,
-                },
-                {
-                  title: 'Foto dan lokasi',
-                  description: 'Bot membantu meminta Foto Laporan, deskripsi, dan titik lokasi.',
-                  icon: Smartphone,
-                },
-                {
-                  title: 'Bisa dilacak',
-                  description: 'Pelapor tetap mendapat Kode Tracking untuk memantau status.',
-                  icon: Search,
-                },
-              ].map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Card key={item.title} hover className="p-6">
-                    <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mb-4">
-                      <Icon className="w-5 h-5 text-emerald-600 dark:text-emerald-300" />
-                    </div>
-                    <h3 className="text-base font-bold text-foreground mb-2">{item.title}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
-                  </Card>
-                );
-              })}
-            </div>
           </div>
         </div>
       </section>

@@ -55,7 +55,7 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden lg:flex items-center gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -73,7 +73,7 @@ export default function Navbar() {
           </div>
 
           {/* Desktop CTA */}
-          <div className="hidden md:flex items-center gap-3 font-bold">
+          <div className="hidden lg:flex items-center gap-3 font-bold">
             <ThemeToggle />
             {user ? (
               <>
@@ -95,7 +95,7 @@ export default function Navbar() {
           {/* Mobile Menu Toggle */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg text-secondary-foreground hover:bg-muted transition"
+            className="lg:hidden p-2 rounded-lg text-secondary-foreground hover:bg-muted transition"
             aria-label="Toggle menu"
           >
             {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -104,7 +104,7 @@ export default function Navbar() {
 
         {/* Mobile Navigation */}
         {isMobileMenuOpen && (
-          <div className="md:hidden pb-4 border-t border-border mt-2 animate-fade-in">
+          <div className="lg:hidden pb-4 border-t border-border mt-2 animate-fade-in">
             <div className="flex flex-col gap-1 pt-3">
               {navItems.map((item) => (
                 <Link

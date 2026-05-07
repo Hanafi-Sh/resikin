@@ -11,6 +11,7 @@ import {
   Search,
   Send,
   ShieldCheck,
+  FileCheck,
 } from 'lucide-react';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -136,12 +137,12 @@ export default function TelegramGuidePage() {
 
       <section className="py-16 lg:py-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-10">
-            <span className="text-sm font-semibold text-emerald-600 uppercase tracking-wider">
+          <div className="mb-10 flex flex-col items-center">
+            <span className="text-lg font-semibold text-emerald-600 uppercase tracking-wider">
               Alur Pelaporan
             </span>
-            <h2 className="mt-3 text-2xl sm:text-3xl font-bold text-foreground">
-              Dari Draf Laporan sampai Laporan Terkirim
+            <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-foreground text-center leading-relaxed">
+              Dari Draf Laporan sampai Laporan <span className="text-gradient">Terkirim</span>
             </h2>
           </div>
 
@@ -149,12 +150,12 @@ export default function TelegramGuidePage() {
             {intakeSteps.map((step, index) => {
               const Icon = step.icon;
               return (
-                <Card key={step.title} hover className="p-6">
-                  <div className="flex items-center justify-between mb-5">
+                <Card key={step.title} hover className="p-6 shadow-sm shadow-slate-200/50">
+                  <div className="flex items-center justify-between mb-5 relative">
                     <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
                       <Icon className="w-5 h-5 text-emerald-600 dark:text-emerald-300" />
                     </div>
-                    <span className="text-sm font-bold text-muted-foreground">
+                    <span className="text-lg font-bold select-none">
                       {String(index + 1).padStart(2, '0')}
                     </span>
                   </div>
@@ -169,23 +170,26 @@ export default function TelegramGuidePage() {
 
       <section className="pb-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-[0.85fr_1.15fr] gap-6">
-            <Card className="p-6">
+          <div className="flex flex-col md:flex-row gap-6">
+            <Card className="p-6 md:p-8 flex flex-col items-center text-center justify-center md:h-auto">
               <div className="w-12 h-12 rounded-xl bg-sky-100 dark:bg-sky-500/10 flex items-center justify-center mb-4">
                 <ShieldCheck className="w-6 h-6 text-sky-600 dark:text-sky-300" />
               </div>
-              <h2 className="text-lg font-bold text-foreground mb-3">Data untuk tindak lanjut</h2>
+              <h3 className="text-lg font-bold text-foreground mb-3">Data untuk tindak lanjut</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Data laporan digunakan untuk verifikasi kelurahan, penugasan, dan komunikasi penanganan.
                 Nomor HP membantu petugas saat membutuhkan klarifikasi lokasi atau kondisi lapangan.
               </p>
             </Card>
 
-            <Card className="p-6">
-              <h2 className="text-lg font-bold text-foreground mb-4">Yang perlu disiapkan</h2>
+            <Card className="p-6 md:p-8 flex flex-col items-center text-center md:h-auto">
+              <div className="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-500/10 flex items-center justify-center mb-4">
+                <FileCheck className="w-6 h-6 text-orange-600 dark:text-orange-300" />
+              </div>
+              <h3 className="text-lg font-bold text-foreground mb-4">Yang perlu disiapkan</h3>
               <div className="grid sm:grid-cols-3 gap-3">
                 {notes.map((note) => (
-                  <div key={note} className="rounded-xl border border-border bg-background p-4">
+                  <div key={note} className="rounded-xl border border-border bg-background p-4 flex items-center">
                     <p className="text-sm text-secondary-foreground leading-relaxed">{note}</p>
                   </div>
                 ))}
