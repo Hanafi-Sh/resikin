@@ -403,50 +403,18 @@ async def handle_photo_confirmation(call: CallbackQuery, state: FSMContext):
             await call.message.edit_text("✅ Baik, foto telah diterima. Silakan ketik deskripsi laporan.")
             await state.set_state(ReportStates.INPUT_DESKRIPSI)
         else:
-            # LLM Flow
-            state_data = ensure_user_state(user_id)
-            state_data["file_ids"].append(file_id)
-            state_data["photo_received"] = True
-            state_data["photo_validated_as_waste"] = True
-            
-            system_note = "[System] Warga MENGONFIRMASI bahwa foto tersebut ADALAH SAMPAH (meskipun Vision AI sempat ragu). Terima foto ini sebagai bukti valid. Lanjutkan tanya data yang kurang."
+            # Non-manual flow (fallback static message)
             await call.message.edit_text("✅ Baik, foto telah diterima sebagai bukti. Silakan lanjutkan laporan Anda.")
             await state.clear()
-            
-            if user_id not in chat_history:
-                chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-            chat_history[user_id].append({"role": "system", "content": system_note})
-            
-            bot = get_bot()
-            await bot.send_chat_action(chat_id=call.message.chat.id, action="typing")
-            try:
-                reply = await call_deepseek(user_id)
-                await process_llm_response(user_id, call.message, reply, state)
-            except DeepSeekTimeoutError:
-                await call.message.answer("⚠️ Terjadi gangguan. Mari gunakan mode manual.")
-                await _force_fallback(call.message, state)
     else:
         # Manusia setuju ini bukan sampah / ingin kirim ulang
         if is_manual:
             await call.message.edit_text("❌ Foto dibatalkan. Silakan kirimkan foto tumpukan sampah yang ingin dilaporkan.")
             await state.set_state(ReportStates.UPLOAD_FOTO)
         else:
-            system_note = "[System] Warga SETUJU bahwa foto tersebut bukan sampah atau memilih untuk mengirim ulang. Tolak foto tersebut dan minta foto tumpukan sampah yang sebenarnya."
+            # Non-manual flow (fallback static message)
             await call.message.edit_text("❌ Foto dibatalkan. Silakan kirimkan foto tumpukan sampah yang ingin dilaporkan.")
             await state.clear()
-            
-            if user_id not in chat_history:
-                chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
-            chat_history[user_id].append({"role": "system", "content": system_note})
-            
-            bot = get_bot()
-            await bot.send_chat_action(chat_id=call.message.chat.id, action="typing")
-            try:
-                reply = await call_deepseek(user_id)
-                await process_llm_response(user_id, call.message, reply, state)
-            except DeepSeekTimeoutError:
-                await call.message.answer("⚠️ Terjadi gangguan. Mari gunakan mode manual.")
-                await _force_fallback(call.message, state)
     
     await call.answer()
 
