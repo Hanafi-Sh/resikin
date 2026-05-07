@@ -26,8 +26,8 @@ async function notifyBot(event, fields) {
       },
       body: JSON.stringify(payload),
     });
-  } catch {
-    // ignore notification errors for now
+  } catch (err) {
+    console.error('Bot Notification Error (New Report):', err);
   }
 }
 

@@ -287,19 +287,17 @@ Jika muncul error `new row violates row-level security policy` saat petugas uplo
 
 ## 🤖 AI Services
 
-ResikIn memakai AI di dua tempat:
+ResikIn menggunakan microservice AI terpisah untuk memvalidasi laporan dan memberikan rekomendasi penugasan. Kode sumber dan dokumentasi lengkap AI dapat ditemukan di folder [**`ai-integration/`**](ai-integration/README.md).
 
 | Area | Env | Fungsi |
 |------|-----|--------|
 | Web App | `AI_SERVICE_URL` | Proxy validasi foto laporan dan rekomendasi petugas ke AI microservice |
 | Telegram Bot | `AI_SERVICE_URL` | Validasi foto dari Telegram sebelum dianggap bukti sampah |
 
-Endpoint AI microservice yang dipakai web app:
-
-```txt
-POST <AI_SERVICE_URL>/api/ai/validate-image
-POST <AI_SERVICE_URL>/api/ai/recommend-assignment
-```
+Layanan AI berjalan di port `8001` dengan endpoint utama:
+- `POST /api/ai/validate-image`: Validasi tumpukan sampah (Base64).
+- `POST /api/ai/recommend-assignment`: Rekomendasi petugas berdasarkan lokasi/kategori.
+- `GET /health`: Cek status kesiapan model.
 
 Di web app, `AI_SERVICE_URL` adalah base URL service. Di bot Telegram, `AI_SERVICE_URL` menunjuk langsung ke endpoint validasi foto, misalnya `https://ai.example.com/api/validate-image`. Jika AI service tidak tersedia, web route akan memberi respons error/fallback sesuai endpoint, sedangkan bot tetap melanjutkan FSM dan menjaga data wajib sebelum laporan disimpan.
 

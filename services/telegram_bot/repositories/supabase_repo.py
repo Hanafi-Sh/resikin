@@ -12,6 +12,7 @@ class SupabaseRepo:
 
     def insert_report(self, report: dict):
         """Create a report through the shared Laporan Intake database function."""
+        print(f"DEBUG: Repo inserting report. kelurahan_id={report.get('kelurahan_id')}")
         payload = {
             "p_reporter_name": report.get("reporter_name"),
             "p_reporter_phone": report.get("reporter_phone"),

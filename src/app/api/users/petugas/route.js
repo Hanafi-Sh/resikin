@@ -35,7 +35,21 @@ export async function GET(request) {
     }
   }
 
-  const { data, error } = await query.order('name');
+  let { data, error } = await query.order('name');
+
+  // Pengecualian Khusus: Selalu sertakan Mas Agus di seluruh kelurahan
+  const AGUS_ID = '67b90a8a-176f-4418-b639-0a5a4cd0ec97';
+  if (kelurahanId && data && !data.find(p => p.id === AGUS_ID)) {
+    const { data: agus } = await supabase
+      .from('users')
+      .select('id, name, phone, role, sector_id')
+      .eq('id', AGUS_ID)
+      .single();
+    
+    if (agus) {
+      data = [...data, agus].sort((a, b) => a.name.localeCompare(b.name));
+    }
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

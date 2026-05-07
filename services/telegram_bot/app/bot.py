@@ -139,19 +139,35 @@ class AntiSpamMiddleware(BaseMiddleware):
 router.message.middleware(AntiSpamMiddleware())
 
 # ── FSM Helpers ──
-async def _start_manual_report_flow(message: Message, state: FSMContext, existing: Optional[dict] = None):
-    user_id = message.from_user.id
-    telegram_id = str(user_id)
+async def _show_kelurahan_picker(message: Message, state: FSMContext):
+    # Dapatkan daftar kelurahan
+    kelurahan_list = get_all_kelurahans()
+    
+    builder = InlineKeyboardBuilder()
+    for kel in kelurahan_list:
+        builder.button(text=kel["name"], callback_data=f"kel:{kel['id']}")
+    
+    builder.adjust(2)
+    await message.answer("🏙️ Pilih wilayah Kelurahan kejadian:", reply_markup=builder.as_markup())
+    await state.set_state(ReportStates.PILIH_KELURAHAN)
 
-    await state.clear()
-    user_state[user_id] = _default_user_state(existing)
-    await state.update_data(
-        telegram_id=telegram_id,
-        reporter_id=(existing or {}).get("id"),
-        reporter_name=(existing or {}).get("name") or _get_telegram_name(message.from_user),
-        reporter_phone=(existing or {}).get("phone") or "",
-    )
-    await _show_kelurahan_picker(message, state)
+async def _show_category_picker(message: Message, state: FSMContext):
+    data = await state.get_data()
+    suggested = data.get("suggested_category")
+    
+    builder = InlineKeyboardBuilder()
+    for cat in CATEGORY_OPTIONS:
+        text = cat["name"]
+        # Tambahkan emoji ✨ jika ini adalah saran AI
+        if suggested and cat["id"] == suggested:
+            text = f"✨ {text}"
+        
+        builder.button(text=text, callback_data=f"cat:{cat['id']}")
+    
+    builder.adjust(2)
+    prompt = "📂 Pilih kategori laporan (Saran AI ditandai ✨):" if suggested else "📂 Pilih kategori laporan:"
+    await message.answer(prompt, reply_markup=builder.as_markup())
+    await state.set_state(ReportStates.PILIH_KATEGORI)
 
 
 MAX_PHOTOS = 3
@@ -204,6 +220,22 @@ async def _ask_for_missing_fields(user_id: int, message: Message, state: FSMCont
             await state.set_state(ReportStates.SHARE_LOCATION)
         elif first_missing == "photo":
             await state.set_state(ReportStates.UPLOAD_FOTO)
+
+async def _start_manual_report_flow(message: Message, state: FSMContext, existing: Optional[dict] = None):
+    user_id = message.from_user.id
+    telegram_id = str(user_id)
+
+    await state.clear()
+    user_state[user_id] = _default_user_state(existing)
+    await state.update_data(
+        telegram_id=telegram_id,
+        reporter_id=(existing or {}).get("id"),
+        reporter_name=(existing or {}).get("name") or _get_telegram_name(message.from_user),
+        reporter_phone=(existing or {}).get("phone") or "",
+        is_manual_flow=True,
+    )
+    await message.answer("📸 Silakan kirimkan foto bukti tumpukan sampah yang ingin dilaporkan.")
+    await state.set_state(ReportStates.UPLOAD_FOTO)
 
 def get_repo() -> "SupabaseRepo":
     global _repo
@@ -456,19 +488,24 @@ async def validate_telegram_photo(file_id: str, chat_id: int) -> dict:
             logger.warning("Photo validation returned unsuccessful response for file_id=%s", file_id)
             return {"accepted": True, "fallback": True, "ai_data": ai_data}
 
-        if ai_data.get("isWaste"):
+        # Handle both is_waste and isWaste for compatibility
+        is_waste = ai_data.get("is_waste") or ai_data.get("isWaste")
+        suggested_cat = ai_data.get("suggested_category")
+
+        if is_waste:
             return {
                 "accepted": True,
                 "fallback": False,
                 "ai_data": ai_data,
-                "suggested_category": normalize_category(ai_data.get("suggested_category")),
+                "suggested_category": normalize_category(suggested_cat),
+                "top_label": suggested_cat
             }
 
         return {
             "accepted": False,
             "fallback": False,
             "ai_data": ai_data,
-            "top_label": ai_data.get("top_label"),
+            "top_label": suggested_cat or "not_waste",
         }
     except Exception as exc:
         logger.error("Image validation error for file_id=%s: %s", file_id, exc)
@@ -596,6 +633,8 @@ async def handle_phone_text_fallback(message: Message, state: FSMContext):
 async def handle_kelurahan(call: CallbackQuery, state: FSMContext):
     kelurahan_id = call.data.split(":", 1)[1] if call.data else ""
     await state.update_data(kelurahan_id=kelurahan_id)
+    draft = ensure_user_state(call.from_user.id)
+    draft["kelurahan_id"] = kelurahan_id
     kel_name = get_kelurahan_name(kelurahan_id)
 
     builder = InlineKeyboardBuilder()
@@ -605,22 +644,29 @@ async def handle_kelurahan(call: CallbackQuery, state: FSMContext):
     kb = builder.as_markup()
     await call.message.answer(
         f"Kelurahan dipilih: {kel_name}.\n\n"
-        "📂 Pilih kategori laporan:",
-        reply_markup=kb,
+        "📍 Bagikan lokasi koordinat tumpukan sampah:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="📍 Bagikan Lokasi Saat Ini", request_location=True)]],
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
     )
-    await state.set_state(ReportStates.PILIH_KATEGORI)
+    await state.set_state(ReportStates.SHARE_LOCATION)
     await call.answer()
 
 @router.callback_query(StateFilter(ReportStates.PILIH_KATEGORI), F.data.startswith("cat:"))
 async def handle_category(call: CallbackQuery, state: FSMContext):
     category_id = call.data.split(":", 1)[1] if call.data else ""
     await state.update_data(category=category_id)
+    draft = ensure_user_state(call.from_user.id)
+    draft["category"] = category_id
     cat_name = get_category_name(category_id)
     await call.message.answer(
         f"Kategori: {cat_name}\n\n"
-        f"📷 Silakan unggah foto tumpukan sampah (maksimal {MAX_PHOTOS} foto) atau ketik '-' untuk melewati (Opsional)."
+        "🏙️ Pilih wilayah Kelurahan kejadian:",
+        reply_markup=None
     )
-    await state.set_state(ReportStates.UPLOAD_FOTO)
+    await _show_kelurahan_picker(call.message, state)
     await call.answer()
 
 @router.message(StateFilter(ReportStates.UPLOAD_FOTO), F.text)
@@ -673,8 +719,8 @@ async def handle_photo_manual(message: Message, state: FSMContext):
             return
 
         suffix = " Sistem validasi foto sedang tidak tersedia, jadi foto tetap diterima." if used_fallback else ""
-        await message.answer(f"✅ 1 foto diterima.{suffix} Silakan ketik deskripsi laporan.")
-        await state.set_state(ReportStates.INPUT_DESKRIPSI)
+        await message.answer(f"✅ 1 foto diterima.{suffix}")
+        await _show_category_picker(message, state)
         return
 
     if mg_id not in _media_group_buffer:
@@ -716,9 +762,9 @@ async def handle_photo_manual(message: Message, state: FSMContext):
 
         suffix = " Sistem validasi foto sedang tidak tersedia untuk sebagian foto, jadi foto tersebut tetap diterima." if used_fallback else ""
         await ctx_msg.answer(
-            f"✅ {len(accepted_ids)} foto diterima.{suffix} Silakan ketik deskripsi laporan."
+            f"✅ {len(accepted_ids)} foto diterima.{suffix}"
         )
-        await ctx_state.set_state(ReportStates.INPUT_DESKRIPSI)
+        await _show_category_picker(ctx_msg, ctx_state)
 
     task = asyncio.create_task(finalize_group())
     _media_group_tasks[mg_id] = task
@@ -765,16 +811,35 @@ async def handle_description(message: Message, state: FSMContext):
         return
 
     await state.update_data(description=description)
-    draft = ensure_user_state(message.from_user.id)
-    draft["description"] = description
+    data = await state.get_data()
+    
+    kelurahan_id = data.get("kelurahan_id", "-")
+    kel_name = get_kelurahan_name(kelurahan_id)
+    category = data.get("category", "-")
+    cat_name = get_category_name(category)
+    file_ids = data.get("file_ids", [])
+    lat = data.get("latitude", 0)
+    lon = data.get("longitude", 0)
 
-    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-    loc_kb = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📍 Bagikan Lokasi Saat Ini", request_location=True)]],
-        resize_keyboard=True
+    summary = (
+        "📋 **KONFIRMASI LAPORAN**\n\n"
+        f"👤 Nama: {data.get('reporter_name', '-')}\n"
+        f"📱 Telepon: {data.get('reporter_phone', '-')}\n"
+        f"🏘️ Kelurahan: {kel_name}\n"
+        f"📂 Kategori: {cat_name}\n"
+        f"📷 Jumlah foto: {len(file_ids)}\n"
+        f"📍 Lokasi: {lat}, {lon}\n"
+        f"📝 Deskripsi: {description}\n\n"
+        "Apakah data di atas sudah benar?"
     )
-    await message.answer("📍 Lokasi wajib diisi untuk memudahkan petugas! Silakan tekan tombol 'Bagikan Lokasi Saat Ini' di bawah, atau gunakan menu Lampiran (📎) -> Lokasi untuk memilih titik di peta secara manual jika Anda tidak berada di lokasi.", reply_markup=loc_kb)
-    await state.set_state(ReportStates.SHARE_LOCATION)
+    
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✅ Konfirmasi & Kirim", callback_data="confirm:yes")
+    builder.button(text="❌ Batal", callback_data="confirm:no")
+    builder.adjust(2)
+    
+    await message.answer(summary, reply_markup=builder.as_markup(), parse_mode="Markdown")
+    await state.set_state(ReportStates.KONFIRMASI)
 
 @router.message(StateFilter(ReportStates.SHARE_LOCATION))
 async def handle_location(message: Message, state: FSMContext):
@@ -788,30 +853,8 @@ async def handle_location(message: Message, state: FSMContext):
         latitude=message.location.latitude,
         longitude=message.location.longitude,
     )
-    lat = message.location.latitude
-    lon = message.location.longitude
-
-    kelurahan_id = data.get("kelurahan_id", "-")
-    kel_name = get_kelurahan_name(kelurahan_id)
-    category = data.get("category", "-")
-    cat_name = get_category_name(category)
-    file_ids = data.get("file_ids", [])
-    summary = (
-        "📋 Konfirmasi laporan:\n"
-        f"- 👤 Nama: {data.get('reporter_name', '-')}\n"
-        f"- 📱 Telepon: {data.get('reporter_phone', '-')}\n"
-        f"- 🏘️ Kelurahan: {kel_name}\n"
-        f"- 📂 Kategori: {cat_name}\n"
-        f"- 📷 Jumlah foto: {len(file_ids)}\n"
-        f"- 📝 Deskripsi: {data.get('description', '-')}\n"
-        f"- 📍 Lokasi: {lat}, {lon}"
-    )
-    builder = InlineKeyboardBuilder()
-    builder.button(text="✅ Konfirmasi", callback_data="confirm:yes")
-    builder.button(text="❌ Batal", callback_data="confirm:no")
-    kb = builder.as_markup()
-    # Remove the location keyboard before sending the inline keyboard
-    from aiogram.types import ReplyKeyboardRemove
+    await message.answer("📝 Silakan ketik deskripsi lengkap laporan Anda (lokasi detail, ciri-ciri sampah, dll):", reply_markup=ReplyKeyboardRemove())
+    await state.set_state(ReportStates.INPUT_DESKRIPSI)
     await message.answer("Lokasi diterima.", reply_markup=ReplyKeyboardRemove())
     await message.answer(summary, reply_markup=kb)
     await state.set_state(ReportStates.KONFIRMASI)
@@ -836,12 +879,12 @@ async def handle_confirm_manual(call: CallbackQuery, state: FSMContext):
 
     report_model = Report(
         user_id=str(call.from_user.id),
-        reporter_id=data.get("reporter_id"),
-        reporter_name=data.get("reporter_name"),
-        reporter_phone=data.get("reporter_phone"),
-        kelurahan_id=data.get("kelurahan_id", "unknown"),
-        category=data.get("category"),
-        file_ids=data.get("file_ids", []),
+        reporter_id=data.get("reporter_id") or draft.get("reporter_id"),
+        reporter_name=data.get("reporter_name") or draft.get("reporter_name"),
+        reporter_phone=data.get("reporter_phone") or draft.get("reporter_phone"),
+        kelurahan_id=data.get("kelurahan_id") or draft.get("kelurahan_id"),
+        category=data.get("category") or draft.get("category"),
+        file_ids=data.get("file_ids", []) or draft.get("file_ids", []),
         description=data.get("description", ""),
         latitude=data.get("latitude"),
         longitude=data.get("longitude"),

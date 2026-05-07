@@ -65,21 +65,28 @@ def _public_app_url(path: str) -> Optional[str]:
     return f"{base_url}{path}"
 
 
+STATUS_MESSAGES = {
+    "diterima": "Laporan Anda sudah diterima oleh koordinator dan akan segera ditugaskan kepada petugas.",
+    "ditugaskan": "Petugas telah ditunjuk untuk menangani laporan Anda. Mohon tunggu pengerjaannya.",
+    "dalam_proses": "Laporan Anda sedang dalam pengerjaan oleh petugas di lapangan.",
+    "selesai": "Laporan Anda telah selesai ditangani. Terima kasih telah membantu menjaga kebersihan!",
+    "ditolak": "Mohon maaf, laporan Anda tidak dapat kami proses saat ini.",
+}
+
+
 def _format_status_message(report: dict, new_status: str) -> str:
     tracking = report.get("tracking_code") or "-"
-    status_label = STATUS_LABELS.get(new_status, new_status or "-")
-    category = report.get("category") or "-"
-    address = report.get("address") or "-"
-    lines = [
-        "Status laporan Anda diperbarui.",
-        f"- Status: {status_label}",
-        f"- Kode: {tracking}",
-        f"- Kategori: {category}",
-        f"- Alamat: {address}",
-    ]
+    
+    # Pesan pembuka spesifik sesuai status
+    intro = STATUS_MESSAGES.get(new_status, f"Status laporan Anda telah diperbarui menjadi: {new_status}")
+
+    msg = f"✨ {intro}\n\n"
+    msg += f"📍 Kode Laporan: {tracking}"
+    
     if new_status == "ditolak" and report.get("reject_reason"):
-        lines.append(f"- Alasan: {report.get('reject_reason')}")
-    return "\n".join(lines)
+        msg += f"\n⚠️ Alasan: {report.get('reject_reason')}"
+        
+    return msg
 
 
 def _get_reporter_telegram_id(repo, report: dict) -> Optional[str]:
