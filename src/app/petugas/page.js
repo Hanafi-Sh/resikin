@@ -12,6 +12,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { cn, formatDateTime, getRelativeTime } from '@/lib/utils';
 import { REPORT_CATEGORY_LABELS } from '@/lib/constants';
 import TelegramLinkCard from '@/components/ui/TelegramLinkCard';
+import { fetchWithAuthRetry } from '@/lib/auth-fetch';
 
 export default function PetugasPage() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function PetugasPage() {
   const fetchAssignments = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/assignments');
+      const res = await fetchWithAuthRetry('/api/assignments');
       if (res.status === 401) { router.push('/login'); return; }
       const data = await res.json();
       setAssignments(data.assignments || []);
@@ -31,7 +32,10 @@ export default function PetugasPage() {
   };
 
   useEffect(() => {
+    // Existing assignment fetch pattern intentionally stays client-side for this UI-only change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAssignments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Separate active vs completed
@@ -39,14 +43,14 @@ export default function PetugasPage() {
   const completedTasks = assignments.filter(a => a.report && a.report.status === 'selesai');
 
   return (
-    <div className="min-h-[80vh] bg-slate-50">
+    <div className="min-h-[80vh] bg-background">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200">
+      <div className="bg-card border-b border-border">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Tugas Saya</h1>
-              <p className="text-sm text-slate-500 mt-1">Daftar tugas penanganan laporan</p>
+              <h1 className="text-2xl font-bold text-foreground">Tugas Saya</h1>
+              <p className="text-sm text-muted-foreground mt-1">Daftar tugas penanganan laporan</p>
             </div>
             <Button variant="secondary" size="sm" onClick={fetchAssignments}>
               <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
@@ -65,20 +69,20 @@ export default function PetugasPage() {
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
-            <span className="ml-2 text-sm text-slate-500">Memuat tugas...</span>
+            <span className="ml-2 text-sm text-muted-foreground">Memuat tugas...</span>
           </div>
         ) : assignments.length === 0 ? (
           <Card className="p-10 text-center">
             <Inbox className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">Belum ada tugas</p>
-            <p className="text-sm text-slate-400 mt-1">Tugas dari koordinator akan muncul di sini</p>
+            <p className="text-muted-foreground font-medium">Belum ada tugas</p>
+            <p className="text-sm text-muted-foreground mt-1">Tugas dari koordinator akan muncul di sini</p>
           </Card>
         ) : (
           <div className="space-y-8">
             {/* Active Tasks */}
             {activeTasks.length > 0 && (
               <div>
-                <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                   <ClipboardList className="w-4 h-4" />
                   Tugas Aktif ({activeTasks.length})
                 </h2>
@@ -96,19 +100,19 @@ export default function PetugasPage() {
                             <span className="text-xs font-mono text-emerald-600">{assignment.report.tracking_code}</span>
                             <StatusBadge status={assignment.report.status} size="sm" />
                           </div>
-                          <h3 className="text-sm font-bold text-slate-900">
+                          <h3 className="text-sm font-bold text-foreground">
                             {REPORT_CATEGORY_LABELS[assignment.report.category]}
                           </h3>
-                          <p className="text-xs text-slate-500 mt-1 line-clamp-2">{assignment.report.description}</p>
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{assignment.report.description}</p>
 
                           <div className="flex items-center gap-4 mt-3">
                             {assignment.report.address && (
-                              <span className="text-xs text-slate-400 flex items-center gap-1">
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
                                 <MapPin className="w-3 h-3" />
                                 {assignment.report.address.substring(0, 40)}...
                               </span>
                             )}
-                            <span className="text-xs text-slate-400 flex items-center gap-1">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
                               <Clock className="w-3 h-3" />
                               {getRelativeTime(assignment.assigned_at)}
                             </span>
@@ -125,7 +129,7 @@ export default function PetugasPage() {
             {/* Completed Tasks */}
             {completedTasks.length > 0 && (
               <div>
-                <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">
+                <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4">
                   ✅ Selesai ({completedTasks.length})
                 </h2>
                 <div className="space-y-3 opacity-70">
@@ -138,10 +142,10 @@ export default function PetugasPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-slate-400">{assignment.report.tracking_code}</span>
+                            <span className="text-xs font-mono text-muted-foreground">{assignment.report.tracking_code}</span>
                             <StatusBadge status="selesai" size="sm" />
                           </div>
-                          <p className="text-sm text-slate-600 mt-1">
+                          <p className="text-sm text-secondary-foreground mt-1">
                             {REPORT_CATEGORY_LABELS[assignment.report.category]}
                           </p>
                         </div>

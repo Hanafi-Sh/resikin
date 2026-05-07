@@ -4,7 +4,7 @@ import { APP_CONFIG } from '@/lib/constants';
 
 export default function Footer() {
   return (
-    <footer className="bg-slate-900 text-slate-300">
+    <footer className="bg-slate-950 text-slate-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Main Footer */}
         <div className="py-12 grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -18,7 +18,7 @@ export default function Footer() {
                 {APP_CONFIG.name}
               </span>
             </div>
-            <p className="text-sm text-slate-400 leading-relaxed max-w-xs">
+            <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
               {APP_CONFIG.description}. Bersama menjaga kebersihan lingkungan kelurahan kita.
             </p>
           </div>
@@ -38,7 +38,7 @@ export default function Footer() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+                    className="text-sm text-muted-foreground hover:text-emerald-400 transition-colors"
                   >
                     {link.label}
                   </Link>
@@ -53,15 +53,15 @@ export default function Footer() {
               Kontak
             </h3>
             <ul className="space-y-3">
-              <li className="flex items-center gap-2.5 text-sm text-slate-400">
+              <li className="flex items-center gap-2.5 text-sm text-muted-foreground">
                 <MapPin className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span>{APP_CONFIG.kelurahan}, Kota Yogyakarta</span>
               </li>
-              <li className="flex items-center gap-2.5 text-sm text-slate-400">
+              <li className="flex items-center gap-2.5 text-sm text-muted-foreground">
                 <Phone className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span>(0274) 000-0000</span>
               </li>
-              <li className="flex items-center gap-2.5 text-sm text-slate-400">
+              <li className="flex items-center gap-2.5 text-sm text-muted-foreground">
                 <Mail className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span>kebersihan@kelurahan.go.id</span>
               </li>
@@ -70,7 +70,7 @@ export default function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="py-5 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+        <div className="py-5 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} {APP_CONFIG.name}. Tim {APP_CONFIG.name} — OmahTI UGM.</p>
           <p>Dibuat dengan 💚 untuk lingkungan yang lebih bersih</p>
         </div>

@@ -85,6 +85,10 @@ async def test_fsm_flow_happy_path_cancel(monkeypatch):
         return func(*args, **kwargs)
 
     monkeypatch.setattr(bot_module.asyncio, "to_thread", immediate_to_thread)
+    async def fake_validate_photo(file_id, chat_id):
+        return {"accepted": True, "fallback": False, "ai_data": {"success": True, "isWaste": True}}
+
+    monkeypatch.setattr(bot_module, "validate_telegram_photo", fake_validate_photo)
     
     ReportStates = bot_module.ReportStates
     state = FakeState(

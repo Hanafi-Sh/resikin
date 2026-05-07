@@ -21,12 +21,12 @@ export const REPORT_STATUS_LABELS = {
 };
 
 export const REPORT_STATUS_COLORS = {
-  [REPORT_STATUS.DIKIRIM]: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-status-dikirim' },
-  [REPORT_STATUS.DITERIMA]: { bg: 'bg-sky-50', text: 'text-sky-700', dot: 'bg-status-diterima' },
-  [REPORT_STATUS.DITUGASKAN]: { bg: 'bg-indigo-50', text: 'text-indigo-700', dot: 'bg-status-ditugaskan' },
-  [REPORT_STATUS.DALAM_PROSES]: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-status-dalam-proses' },
-  [REPORT_STATUS.SELESAI]: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-status-selesai' },
-  [REPORT_STATUS.DITOLAK]: { bg: 'bg-rose-50', text: 'text-rose-700', dot: 'bg-status-ditolak' },
+  [REPORT_STATUS.DIKIRIM]: { bg: 'bg-muted', text: 'text-secondary-foreground', dot: 'bg-status-dikirim' },
+  [REPORT_STATUS.DITERIMA]: { bg: 'bg-sky-50 dark:bg-sky-500/10', text: 'text-sky-700 dark:text-sky-300', dot: 'bg-status-diterima' },
+  [REPORT_STATUS.DITUGASKAN]: { bg: 'bg-indigo-50 dark:bg-indigo-500/10', text: 'text-indigo-700 dark:text-indigo-300', dot: 'bg-status-ditugaskan' },
+  [REPORT_STATUS.DALAM_PROSES]: { bg: 'bg-amber-50 dark:bg-amber-500/10', text: 'text-amber-700 dark:text-amber-300', dot: 'bg-status-dalam-proses' },
+  [REPORT_STATUS.SELESAI]: { bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-status-selesai' },
+  [REPORT_STATUS.DITOLAK]: { bg: 'bg-rose-50 dark:bg-rose-500/10', text: 'text-rose-700 dark:text-rose-300', dot: 'bg-status-ditolak' },
 };
 
 export const REPORT_CATEGORIES = [
@@ -50,6 +50,7 @@ export const NAV_ITEMS = {
   public: [
     { href: '/', label: 'Beranda' },
     { href: '/lapor', label: 'Laporkan' },
+    { href: '/telegram', label: 'Bot Telegram' },
     { href: '/tracking', label: 'Lacak Laporan' },
     { href: '/info', label: 'Informasi' },
   ],
@@ -69,4 +70,6 @@ export const APP_CONFIG = {
   maxPhotos: 3,
   maxPhotoSizeMB: 5,
   trackingCodePrefix: 'RSK',
+  telegramBotUsername: 'resikinbot',
+  telegramBotUrl: 'https://t.me/resikinbot',
 };

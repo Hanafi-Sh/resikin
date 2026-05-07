@@ -1,3 +1,6 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   ClipboardList,
@@ -12,9 +15,13 @@ import {
   Sparkles,
   TrendingUp,
   Leaf,
+  Bot,
+  MessageCircle,
+  Smartphone,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import { APP_CONFIG } from '@/lib/constants';
 
 // Stat data (placeholder — will be dynamic later)
 const stats = [
@@ -72,6 +79,31 @@ const features = [
 ];
 
 export default function HomePage() {
+  const [miniStats, setMiniStats] = useState({ dikirim: 0, dalam_proses: 0, selesai: 0 });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/reports?limit=50');
+        if (res.ok) {
+          const data = await res.json();
+          const reports = data.reports || [];
+          
+          const s = { dikirim: 0, dalam_proses: 0, selesai: 0 };
+          reports.forEach((r) => {
+            if (r.status === 'dikirim' || r.status === 'diterima') s.dikirim++;
+            if (r.status === 'ditugaskan' || r.status === 'dalam_proses') s.dalam_proses++;
+            if (r.status === 'selesai') s.selesai++;
+          });
+          setMiniStats(s);
+        }
+      } catch (error) {
+        console.error('Failed to fetch mini stats:', error);
+      }
+    };
+
+    fetchStats();
+  }, []);
   return (
     <>
       {/* ============================================
@@ -143,7 +175,7 @@ export default function HomePage() {
                     </div>
                   ))}
                 </div>
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-muted-foreground">
                   <span className="text-emerald-400 font-semibold">3,500+</span> warga sudah melapor
                 </p>
               </div>
@@ -164,7 +196,7 @@ export default function HomePage() {
                         <p className="text-white font-semibold text-sm">Dashboard Hari Ini</p>
                           {(() => {
                             const today = new Date().toLocaleDateString();
-                            return <p  className="text-slate-400 text-xs">{today}</p>;
+                            return <p  className="text-muted-foreground text-xs">{today}</p>;
                           })()}
                       </div>
                     </div>
@@ -176,13 +208,13 @@ export default function HomePage() {
                   {/* Stats mini cards */}
                   <div className="grid grid-cols-3 gap-3">
                     {[
-                      { label: 'Baru', value: '12', color: 'text-sky-400' },
-                      { label: 'Proses', value: '8', color: 'text-amber-400' },
-                      { label: 'Selesai', value: '23', color: 'text-emerald-400' },
+                      { label: 'Baru', value: miniStats.dikirim, color: 'text-sky-400' },
+                      { label: 'Proses', value: miniStats.dalam_proses, color: 'text-amber-400' },
+                      { label: 'Selesai', value: miniStats.selesai, color: 'text-emerald-400' },
                     ].map((stat) => (
                       <div key={stat.label} className="bg-white/5 rounded-xl p-3 text-center">
                         <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-                        <p className="text-xs text-slate-400 mt-1">{stat.label}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
                       </div>
                     ))}
                   </div>
@@ -197,7 +229,7 @@ export default function HomePage() {
                       <div key={i} className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-3">
                         <div>
                           <p className="text-white text-sm font-medium">{item.cat}</p>
-                          <p className="text-slate-400 text-xs">{item.area}</p>
+                          <p className="text-muted-foreground text-xs">{item.area}</p>
                         </div>
                         <span className={`text-xs font-medium ${item.statusColor}`}>{item.status}</span>
                       </div>
@@ -221,7 +253,7 @@ export default function HomePage() {
       {/* ============================================
           STATS SECTION
           ============================================ */}
-      <section className="relative -mt-12 z-10">
+      <section className="relative z-10 bg-card">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {stats.map((stat, i) => {
@@ -229,13 +261,13 @@ export default function HomePage() {
               return (
                 <div
                   key={stat.label}
-                  className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 p-5 text-center hover:shadow-xl transition-shadow duration-300"
+                  className="bg-card rounded-2xl shadow-sm shadow-slate-200/50 border border-border -translate-y-12 p-5 text-center hover:shadow-xl transition-shadow duration-300"
                 >
-                  <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
                     <Icon className="w-5 h-5 text-emerald-600" />
                   </div>
-                  <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
-                  <p className="text-xs text-slate-500 mt-1">{stat.label}</p>
+                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
                 </div>
               );
             })}
@@ -246,16 +278,16 @@ export default function HomePage() {
       {/* ============================================
           HOW IT WORKS
           ============================================ */}
-      <section className="py-24 bg-white" id="cara-kerja">
+      <section className="py-24 bg-card" id="cara-kerja">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <span className="text-lg font-semibold text-emerald-600 uppercase tracking-wider">
               Cara Kerja
             </span>
-            <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-slate-900">
+            <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-foreground">
               Semudah <span className="text-gradient">3 Langkah</span>
             </h2>
-            <p className="mt-4 text-lg text-slate-500 max-w-2xl mx-auto">
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
               Tidak perlu download aplikasi. Tidak perlu membuat akun. Langsung laporkan dari browser Anda.
             </p>
           </div>
@@ -267,14 +299,14 @@ export default function HomePage() {
                 <div key={item.step} className="relative group">
                   {/* Connector line */}
                   {i < steps.length - 1 && (
-                    <div className="md:block absolute -bottom-5 left-[40%] md:top-12 md:left-[60%] w-[20%] md:w-[80%] md:rotate-0 rotate-90 h-0.5 bg-slate-200">
-                      <div className="absolute right-0 -top-1 w-1 h-1 border-r-2 border-t-2 border-slate-300 rotate-45" />
+                    <div className="md:block absolute -bottom-5 left-[40%] md:top-12 md:left-[60%] w-[20%] md:w-[80%] md:rotate-0 rotate-90 h-0.5 bg-muted">
+                      <div className="absolute right-0 -top-1 w-1 h-1 border-r-2 border-t-2 border-border rotate-45" />
                     </div>
                   )}
 
-                  <Card hover className="text-center p-8 relative overflow-hidden group-hover:border-emerald-200 transition-colors">
+                  <Card hover className="text-center p-8 relative h-60 overflow-hidden group-hover:border-emerald-200 dark:border-emerald-500/30 transition-colors">
                     {/* Step number watermark */}
-                    <span className="absolute top-4 left-6 text-3xl font-black text-black select-none">
+                    <span className="absolute top-4 left-6 text-3xl font-black select-none">
                       {item.step}
                     </span>
 
@@ -282,8 +314,8 @@ export default function HomePage() {
                       <Icon className="w-7 h-7 text-white" />
                     </div>
 
-                    <h3 className="text-xl font-bold text-slate-900 mb-3 relative z-10">{item.title}</h3>
-                    <p className="text-slate-500 text-sm leading-relaxed relative z-10">{item.description}</p>
+                    <h3 className="text-xl font-bold text-foreground mb-3 relative z-10">{item.title}</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed relative z-10">{item.description}</p>
                   </Card>
                 </div>
               );
@@ -293,18 +325,95 @@ export default function HomePage() {
       </section>
 
       {/* ============================================
+          TELEGRAM INTAKE
+          ============================================ */}
+      <section className="py-24 bg-background" id="telegram">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center text-center md:text-left">
+            <div>
+              <span className="inline-flex items-center gap-2 text-lg font-semibold text-emerald-600 uppercase tracking-wider">
+                <Bot className="w-5 h-5" />
+                Bot Telegram
+              </span>
+              <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-foreground leading-relaxed">
+                Laporkan Sampah lewat <span className="text-gradient">@{APP_CONFIG.telegramBotUsername}</span>
+              </h2>
+              <p className="mt-5 text-lg text-muted-foreground leading-relaxed">
+                ResikIn juga menerima laporan melalui Telegram. Warga dapat mengirim Draf Laporan lewat bot,
+                lalu laporan yang sudah dikonfirmasi masuk ke sistem kelurahan untuk diteruskan ke petugas DLH.
+              </p>
+
+              <div className="mt-8 flex flex-wrap gap-4">
+                <a
+                  href={APP_CONFIG.telegramBotUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-emerald-600/20 transition-all duration-200 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-background active:scale-[0.98]"
+                >
+                  Buka @{APP_CONFIG.telegramBotUsername}
+                  <ArrowRight className="w-5 h-5" />
+                </a>
+                <Link href="/telegram">
+                  <Button variant="outline" size="xl">
+                    Lihat Panduan
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              {[
+                {
+                  title: 'Tanpa membuka website',
+                  description: 'Mulai laporan langsung dari chat Telegram yang sudah familiar.',
+                  icon: MessageCircle,
+                },
+                {
+                  title: 'Tetap masuk sistem',
+                  description: 'Laporan yang dikonfirmasi menjadi Laporan Terkirim di ResikIn.',
+                  icon: ClipboardList,
+                },
+                {
+                  title: 'Foto dan lokasi',
+                  description: 'Bot membantu meminta Foto Laporan, deskripsi, dan titik lokasi.',
+                  icon: Smartphone,
+                },
+                {
+                  title: 'Bisa dilacak',
+                  description: 'Pelapor tetap mendapat Kode Tracking untuk memantau status.',
+                  icon: Search,
+                },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Card key={item.title} hover className="p-6">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex mx-auto md:mx-0 items-center justify-center mb-4">
+                      <Icon className="w-5 h-5 text-emerald-600 dark:text-emerald-300" />
+                    </div>
+                    <h3 className="text-base font-bold text-foreground mb-2">{item.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      {/* ============================================
           FEATURES
           ============================================ */}
-      <section className="py-24 bg-slate-50" id="fitur">
+      <section className="py-24 bg-background" id="fitur">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <span className="text-lg font-semibold text-emerald-600 uppercase tracking-wider">
               Fitur Unggulan
             </span>
-            <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-slate-900">
+            <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-foreground">
               Kenapa Pakai <span className="text-gradient">ResikIn</span>?
             </h2>
-            <p className="mt-4 text-lg text-slate-500 max-w-2xl mx-auto">
+            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
               Didesain khusus untuk kebutuhan koordinasi sampah di level kelurahan.
             </p>
           </div>
@@ -314,8 +423,8 @@ export default function HomePage() {
               const Icon = feature.icon;
               return (
                 <Card key={feature.title} hover className="p-6 flex gap-5 bg-gradient-emerald">
-                  <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
-                    <Icon className="w-6 h-6 text-emerald-600" />
+                  <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-500 rounded-xl flex items-center justify-center shrink-0">
+                    <Icon className="w-6 h-6 text-emerald-600 dark:text-emerald-50" />
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-white mb-2">{feature.title}</h3>
@@ -350,7 +459,7 @@ export default function HomePage() {
                   <Button
                     variant="secondary"
                     size="xl"
-                    className="bg-white text-emerald-700 hover:bg-emerald-50 shadow-xl"
+                    className="bg-card text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 shadow-xl"
                   >
                     Buat Laporan
                     <ArrowRight className="w-5 h-5" />

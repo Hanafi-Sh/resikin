@@ -66,7 +66,7 @@ def notification_fakes(monkeypatch):
     monkeypatch.setattr(supabase_repo, "SupabaseRepo", lambda: repo)
     monkeypatch.setattr(notifications, "get_bot", lambda: bot)
     monkeypatch.setattr(notifications.settings, "NOTIFY_WEBHOOK_SECRET", "")
-    monkeypatch.setattr(notifications.settings, "APP_BASE_URL", "http://127.0.0.1:3000")
+    monkeypatch.setattr(notifications.settings, "APP_BASE_URL", "https://resikin.test")
 
     return repo, bot
 
@@ -96,7 +96,7 @@ async def test_notify_report_created_sends_to_kelurahan_koordinators(notificatio
 
     button = message["reply_markup"].inline_keyboard[0][0]
     assert button.text == "Lihat & Verifikasi Laporan"
-    assert button.url == "http://127.0.0.1:3000/dashboard/laporan/report-1"
+    assert button.url == "https://resikin.test/dashboard/laporan/report-1"
 
 
 @pytest.mark.asyncio
@@ -127,7 +127,7 @@ async def test_notify_report_assigned_sends_to_assigned_petugas(notification_fak
 
     button = message["reply_markup"].inline_keyboard[0][0]
     assert button.text == "Buka Daftar Tugas"
-    assert button.url == "http://127.0.0.1:3000/petugas"
+    assert button.url == "https://resikin.test/petugas"
 
 
 @pytest.mark.asyncio
@@ -182,7 +182,32 @@ async def test_notify_report_status_changed_sends_to_reporter(notification_fakes
 
     button = message["reply_markup"].inline_keyboard[0][0]
     assert button.text == "Lacak Laporan"
-    assert button.url == "http://127.0.0.1:3000/tracking?code=RSK-001"
+    assert button.url == "https://resikin.test/tracking?code=RSK-001"
+
+
+@pytest.mark.asyncio
+async def test_notify_report_status_changed_with_local_app_url_sends_without_button(notification_fakes, monkeypatch):
+    repo, bot = notification_fakes
+    monkeypatch.setattr(notifications.settings, "APP_BASE_URL", "http://127.0.0.1:3000")
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.post(
+            "/notifications/report",
+            json={
+                "event": "status_changed",
+                "report_id": REPORT["id"],
+                "old_status": "dikirim",
+                "new_status": "dalam_proses",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"sent": 1, "recipients": 1}
+    assert repo.link_queries == [("reporter", "reporter-1")]
+    assert len(bot.messages) == 1
+    assert bot.messages[0]["chat_id"] == 3001
+    assert bot.messages[0]["reply_markup"] is None
 
 
 @pytest.mark.asyncio
@@ -198,6 +223,7 @@ async def test_notify_report_status_changed_falls_back_to_report_user_id(notific
             json={
                 "event": "status_changed",
                 "report_id": REPORT["id"],
+                "old_status": "dalam_proses",
                 "new_status": "selesai",
             },
         )
@@ -219,6 +245,7 @@ async def test_notify_report_status_changed_rejected_includes_reason(notificatio
             json={
                 "event": "status_changed",
                 "report_id": REPORT["id"],
+                "old_status": "dikirim",
                 "new_status": "ditolak",
             },
         )
@@ -242,6 +269,7 @@ async def test_notify_report_status_changed_without_telegram_id_returns_reason(n
             json={
                 "event": "status_changed",
                 "report_id": REPORT["id"],
+                "old_status": "dalam_proses",
                 "new_status": "selesai",
             },
         )

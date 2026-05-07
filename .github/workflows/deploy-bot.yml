@@ -1,9 +1,10 @@
 name: Deploy Telegram Bot
 
-on:
+'on':
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   deploy-bot:
@@ -17,5 +18,97 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
+          command_timeout: 10m
           script: |
+            set -e
+
+            BOT_DIR="/home/ubuntu/services/telegram_bot"
+
+            echo "== Locate git repository =="
+            REPO_DIR="$(find /home/ubuntu -maxdepth 5 -type d -name .git -exec dirname {} \; | while read -r dir; do
+              if [ -d "$dir/services/telegram_bot" ]; then
+                echo "$dir"
+                break
+              fi
+            done)"
+
+            if [ -n "$REPO_DIR" ]; then
+              cd "$REPO_DIR"
+
+              echo "== Before sync =="
+              git status --short || true
+              git log -1 --oneline || true
+
+              echo "== Force sync to origin/main =="
+              git fetch origin main
+              git reset --hard origin/main
+
+              echo "== Synced commit =="
+              git log -1 --oneline
+              git rev-parse HEAD
+
+              echo "== Sync bot runtime files =="
+              rsync -a --delete \
+                --exclude venv \
+                --exclude .venv \
+                --exclude .env \
+                --exclude .env.* \
+                --exclude __pycache__ \
+                "$REPO_DIR/services/telegram_bot/" "$BOT_DIR/"
+              find "$BOT_DIR" \
+                -path "$BOT_DIR/venv" -prune -o \
+                -path "$BOT_DIR/.venv" -prune -o \
+                -type d -name __pycache__ -exec rm -rf {} +
+              find "$BOT_DIR" \
+                -path "$BOT_DIR/venv" -prune -o \
+                -path "$BOT_DIR/.venv" -prune -o \
+                -type f -name "*.pyc" -exec rm -f {} +
+            else
+              echo "No git repository containing services/telegram_bot found under /home/ubuntu."
+              echo "Falling back to the VPS deploy script."
+            fi
+
+            echo "== Run VPS deploy script =="
             /home/ubuntu/deploy-resikin-bot.sh
+
+            echo "== Show systemd unit =="
+            if sudo -n true 2>/dev/null; then
+              sudo -n systemctl cat resikin-bot.service || true
+              sudo -n systemctl show -p WorkingDirectory resikin-bot.service || true
+            else
+              systemctl cat resikin-bot.service || true
+              systemctl show -p WorkingDirectory resikin-bot.service || true
+              echo "No passwordless sudo; privileged systemd commands may be skipped."
+            fi
+
+            echo "== Validate .env and token =="
+            if [ ! -f "$BOT_DIR/.env" ]; then
+              echo "Missing $BOT_DIR/.env"
+              exit 1
+            fi
+            TELEGRAM_BOT_TOKEN="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$BOT_DIR/.env" | head -n1 | cut -d= -f2-)"
+            if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
+              echo "TELEGRAM_BOT_TOKEN is empty"
+              exit 1
+            fi
+
+            echo "== Clear webhook (ensure long-poll works) =="
+            curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook?drop_pending_updates=true" >/dev/null
+
+            echo "== Restart bot and show logs =="
+            if sudo -n true 2>/dev/null; then
+              sudo -n systemctl restart resikin-bot.service
+              sleep 2
+              sudo -n systemctl status resikin-bot.service --no-pager || true
+              sudo -n journalctl -u resikin-bot.service -n 200 --no-pager || true
+            else
+              echo "No passwordless sudo; skipping restart/journalctl."
+              systemctl status resikin-bot.service --no-pager || true
+            fi
+
+            echo "== Verify runtime DeepSeek removal =="
+            cd "$BOT_DIR"
+            if grep -R -E "DEEPSEEK|AsyncOpenAI|call_deepseek|from openai|import openai" -n app domain repositories requirements.txt run_bot.py; then
+              echo "DeepSeek/OpenAI runtime code still found. Refusing to deploy."
+              exit 1
+            fi

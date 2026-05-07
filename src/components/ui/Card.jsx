@@ -4,7 +4,7 @@ export default function Card({ children, className, hover = false, ...props }) {
   return (
     <div
       className={cn(
-        'bg-white rounded-2xl border border-slate-200/60',
+        'bg-card text-card-foreground rounded-2xl border border-border',
         'shadow-sm',
         hover && 'transition-all duration-300 hover:shadow-lg hover:-translate-y-1',
         className

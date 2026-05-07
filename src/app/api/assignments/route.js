@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { withReportGallery } from '@/lib/report-gallery';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,7 @@ export async function GET(request) {
       *,
       report:reports(
         id, tracking_code, category, description, address,
-        latitude, longitude, status, created_at,
+        latitude, longitude, status, created_at, file_ids,
         report_photos(id, photo_url, type)
       ),
       petugas:users!assignments_petugas_id_fkey(id, name, phone)
@@ -57,5 +58,10 @@ export async function GET(request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ assignments: data || [] });
+  const assignments = (data || []).map((assignment) => ({
+    ...assignment,
+    report: withReportGallery(assignment.report),
+  }));
+
+  return NextResponse.json({ assignments });
 }

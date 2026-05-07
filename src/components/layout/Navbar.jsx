@@ -7,6 +7,7 @@ import { Menu, X, Leaf, LogOut, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS, APP_CONFIG } from '@/lib/constants';
 import Button from '@/components/ui/Button';
+import ThemeToggle from '@/components/theme/ThemeToggle';
 import { createClient } from '@/lib/supabase/client';
 
 export default function Navbar() {
@@ -40,7 +41,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 glass border-b border-slate-200/50 backdrop-blur-sm">
+    <header className="sticky top-0 z-50 glass border-b border-border backdrop-blur-sm">
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -48,13 +49,13 @@ export default function Navbar() {
             <div className="w-9 h-9 bg-gradient-emerald rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
               <Leaf className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-slate-900 tracking-tight">
+            <span className="text-xl font-bold text-foreground tracking-tight">
               {APP_CONFIG.name}
             </span>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden lg:flex items-center gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -62,8 +63,8 @@ export default function Navbar() {
                 className={cn(
                   'px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200',
                   pathname === item.href
-                    ? 'text-emerald-700 bg-emerald-50'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10'
+                    : 'text-secondary-foreground hover:text-foreground hover:bg-muted'
                 )}
               >
                 {item.label}
@@ -72,7 +73,8 @@ export default function Navbar() {
           </div>
 
           {/* Desktop CTA */}
-          <div className="hidden md:flex items-center gap-3 font-bold">
+          <div className="hidden lg:flex items-center gap-3 font-bold">
+            <ThemeToggle />
             {user ? (
               <>
                 <Link href="/dashboard">
@@ -93,7 +95,7 @@ export default function Navbar() {
           {/* Mobile Menu Toggle */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition"
+            className="lg:hidden p-2 rounded-lg text-secondary-foreground hover:bg-muted transition"
             aria-label="Toggle menu"
           >
             {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -102,7 +104,7 @@ export default function Navbar() {
 
         {/* Mobile Navigation */}
         {isMobileMenuOpen && (
-          <div className="md:hidden pb-4 border-t border-slate-100 mt-2 animate-fade-in">
+          <div className="lg:hidden pb-4 border-t border-border mt-2 animate-fade-in">
             <div className="flex flex-col gap-1 pt-3">
               {navItems.map((item) => (
                 <Link
@@ -112,14 +114,15 @@ export default function Navbar() {
                   className={cn(
                     'px-4 py-2.5 rounded-lg text-sm font-bold transition-colors',
                     pathname === item.href
-                      ? 'text-emerald-700 bg-emerald-50'
-                      : 'text-slate-600 hover:bg-slate-50'
+                      ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10'
+                      : 'text-secondary-foreground hover:bg-muted'
                   )}
                 >
                   {item.label}
                 </Link>
               ))}
-              <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-100 font-bold">
+              <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-border font-bold">
+                <ThemeToggle showLabel className="w-full" />
                 {user ? (
                   <>
                     <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
