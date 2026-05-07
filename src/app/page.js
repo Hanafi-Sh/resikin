@@ -1,3 +1,6 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   ClipboardList,
@@ -72,6 +75,31 @@ const features = [
 ];
 
 export default function HomePage() {
+  const [miniStats, setMiniStats] = useState({ dikirim: 0, dalam_proses: 0, selesai: 0 });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/reports?limit=50');
+        if (res.ok) {
+          const data = await res.json();
+          const reports = data.reports || [];
+          
+          const s = { dikirim: 0, dalam_proses: 0, selesai: 0 };
+          reports.forEach((r) => {
+            if (r.status === 'dikirim' || r.status === 'diterima') s.dikirim++;
+            if (r.status === 'ditugaskan' || r.status === 'dalam_proses') s.dalam_proses++;
+            if (r.status === 'selesai') s.selesai++;
+          });
+          setMiniStats(s);
+        }
+      } catch (error) {
+        console.error('Failed to fetch mini stats:', error);
+      }
+    };
+
+    fetchStats();
+  }, []);
   return (
     <>
       {/* ============================================
@@ -176,9 +204,9 @@ export default function HomePage() {
                   {/* Stats mini cards */}
                   <div className="grid grid-cols-3 gap-3">
                     {[
-                      { label: 'Baru', value: '12', color: 'text-sky-400' },
-                      { label: 'Proses', value: '8', color: 'text-amber-400' },
-                      { label: 'Selesai', value: '23', color: 'text-emerald-400' },
+                      { label: 'Baru', value: miniStats.dikirim, color: 'text-sky-400' },
+                      { label: 'Proses', value: miniStats.dalam_proses, color: 'text-amber-400' },
+                      { label: 'Selesai', value: miniStats.selesai, color: 'text-emerald-400' },
                     ].map((stat) => (
                       <div key={stat.label} className="bg-white/5 rounded-xl p-3 text-center">
                         <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
