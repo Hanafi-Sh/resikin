@@ -221,7 +221,7 @@ export default function HomePage() {
       {/* ============================================
           STATS SECTION
           ============================================ */}
-      <section className="relative -mt-12 z-10">
+      <section className="relative z-10 bg-card">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {stats.map((stat, i) => {
@@ -229,7 +229,7 @@ export default function HomePage() {
               return (
                 <div
                   key={stat.label}
-                  className="bg-card rounded-2xl shadow-lg shadow-slate-200/50 border border-border p-5 text-center hover:shadow-xl transition-shadow duration-300"
+                  className="bg-card rounded-2xl shadow-sm shadow-slate-200/50 border border-border -translate-y-12 p-5 text-center hover:shadow-xl transition-shadow duration-300"
                 >
                   <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl flex items-center justify-center mx-auto mb-3">
                     <Icon className="w-5 h-5 text-emerald-600" />
@@ -274,7 +274,7 @@ export default function HomePage() {
 
                   <Card hover className="text-center p-8 relative overflow-hidden group-hover:border-emerald-200 dark:border-emerald-500/30 transition-colors">
                     {/* Step number watermark */}
-                    <span className="absolute top-4 left-6 text-3xl font-black text-black select-none">
+                    <span className="absolute top-4 left-6 text-3xl font-black select-none">
                       {item.step}
                     </span>
 
@@ -314,8 +314,8 @@ export default function HomePage() {
               const Icon = feature.icon;
               return (
                 <Card key={feature.title} hover className="p-6 flex gap-5 bg-gradient-emerald">
-                  <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl flex items-center justify-center shrink-0">
-                    <Icon className="w-6 h-6 text-emerald-600" />
+                  <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-500 rounded-xl flex items-center justify-center shrink-0">
+                    <Icon className="w-6 h-6 text-emerald-600 dark:text-emerald-50" />
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-white mb-2">{feature.title}</h3>
