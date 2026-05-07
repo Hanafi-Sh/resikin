@@ -391,6 +391,7 @@ class ReportStates(StatesGroup):
     PILIH_KELURAHAN = State()
     PILIH_KATEGORI = State()
     UPLOAD_FOTO = State()
+    KONFIRMASI_FOTO = State()  # Tambahan untuk konfirmasi foto bukan sampah
     INPUT_DESKRIPSI = State()
     SHARE_LOCATION = State()
     KONFIRMASI = State()
@@ -786,7 +787,23 @@ async def handle_photo_llm(message: Message, state: FSMContext):
                 top_label = ai_data.get("top_label")
                 state_data["photo_received"] = False
                 state_data["photo_validated_as_waste"] = False
-                system_note = f"[System] Warga baru saja mengirim foto, TETAPI Vision AI mendeteksi itu BUKAN SAMPAH (spam/terdeteksi sebagai '{top_label}'). Tolak foto ini dengan sopan dan minta foto tumpukan sampah yang sebenarnya."
+                
+                # Tambahkan logika konfirmasi manusia
+                builder = InlineKeyboardBuilder()
+                builder.button(text="✅ Ya, Tetap Gunakan", callback_data="photo_confirm:yes")
+                builder.button(text="❌ Tidak, Kirim Ulang", callback_data="photo_confirm:no")
+                
+                await message.answer(
+                    "⚠️ **Sistem mendeteksi bahwa foto ini kemungkinan bukan sampah.**\n\n"
+                    "Apakah Anda yakin foto ini adalah bukti tumpukan sampah yang ingin dilaporkan?",
+                    reply_markup=builder.as_markup(),
+                    parse_mode="Markdown"
+                )
+                
+                # Set state agar message lain tidak masuk ke LLM dulu sebelum diputuskan
+                await state.set_state(ReportStates.KONFIRMASI_FOTO)
+                await state.update_data(pending_file_id=file_id, pending_ai_data=ai_data)
+                return  # Berhenti di sini, tunggu callback
         else:
             state_data["file_ids"].append(file_id)
             state_data["photo_received"] = True
@@ -808,6 +825,55 @@ async def handle_photo_llm(message: Message, state: FSMContext):
     except DeepSeekTimeoutError:
         await message.answer("⚠️ Sistem AI gambar kami sedang gangguan. Mari kita gunakan pelaporan manual.")
         await _force_fallback(message, state)
+
+
+@router.callback_query(StateFilter(ReportStates.KONFIRMASI_FOTO), F.data.startswith("photo_confirm:"))
+async def handle_photo_confirmation(call: CallbackQuery, state: FSMContext):
+    decision = call.data.split(":", 1)[1] if call.data else ""
+    user_id = call.from_user.id
+    state_data = ensure_user_state(user_id)
+    data = await state.get_data()
+    
+    file_id = data.get("pending_file_id")
+    ai_data = data.get("pending_ai_data") or {}
+
+    if decision == "yes":
+        # Manusia memaksa bahwa ini adalah sampah
+        state_data["file_ids"].append(file_id)
+        state_data["photo_received"] = True
+        state_data["photo_validated_as_waste"] = True
+        
+        system_note = "[System] Warga MENGONFIRMASI bahwa foto tersebut ADALAH SAMPAH (meskipun Vision AI sempat ragu). Terima foto ini sebagai bukti valid. Lanjutkan tanya data yang kurang."
+        await call.message.edit_text("✅ Baik, foto telah diterima sebagai bukti. Silakan lanjutkan laporan Anda.")
+    else:
+        # Manusia setuju ini bukan sampah / ingin kirim ulang
+        system_note = "[System] Warga SETUJU bahwa foto tersebut bukan sampah atau memilih untuk mengirim ulang. Tolak foto tersebut dan minta foto tumpukan sampah yang sebenarnya."
+        await call.message.edit_text("❌ Foto dibatalkan. Silakan kirimkan foto tumpukan sampah yang ingin dilaporkan.")
+
+    await state.clear() # Kembali ke mode LLM (None state)
+    
+    # Update LLM history with the human decision
+    if user_id not in chat_history:
+        chat_history[user_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    
+    chat_history[user_id].append({"role": "system", "content": system_note})
+    
+    # Panggil AI untuk merespon keputusan tersebut
+    bot = get_bot()
+    await bot.send_chat_action(chat_id=call.message.chat.id, action="typing")
+    try:
+        reply = await call_deepseek(user_id)
+        await process_llm_response(user_id, call.message, reply, state)
+    except DeepSeekTimeoutError:
+        await call.message.answer("⚠️ Terjadi gangguan. Mari gunakan mode manual.")
+        await _force_fallback(call.message, state)
+    
+    await call.answer()
+
+
+@router.message(StateFilter(ReportStates.KONFIRMASI_FOTO))
+async def handle_waiting_for_photo_confirmation(message: Message):
+    await message.answer("⚠️ Mohon konfirmasi foto di atas terlebih dahulu dengan menekan tombol yang tersedia sebelum melanjutkan.")
 
 
 # ── FSM Manual Handlers ──
