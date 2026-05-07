@@ -50,6 +50,7 @@ export const NAV_ITEMS = {
   public: [
     { href: '/', label: 'Beranda' },
     { href: '/lapor', label: 'Laporkan' },
+    { href: '/telegram', label: 'Bot Telegram' },
     { href: '/tracking', label: 'Lacak Laporan' },
     { href: '/info', label: 'Informasi' },
   ],
@@ -69,4 +70,6 @@ export const APP_CONFIG = {
   maxPhotos: 3,
   maxPhotoSizeMB: 5,
   trackingCodePrefix: 'RSK',
+  telegramBotUsername: 'resikinbot',
+  telegramBotUrl: 'https://t.me/resikinbot',
 };
