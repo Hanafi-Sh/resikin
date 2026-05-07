@@ -84,18 +84,10 @@ export default function HomePage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await fetch('/api/reports?limit=50');
+        const res = await fetch('/api/reports?stats=true');
         if (res.ok) {
-          const data = await res.json();
-          const reports = data.reports || [];
-          
-          const s = { dikirim: 0, dalam_proses: 0, selesai: 0 };
-          reports.forEach((r) => {
-            if (r.status === 'dikirim' || r.status === 'diterima') s.dikirim++;
-            if (r.status === 'ditugaskan' || r.status === 'dalam_proses') s.dalam_proses++;
-            if (r.status === 'selesai') s.selesai++;
-          });
-          setMiniStats(s);
+          const stats = await res.json();
+          setMiniStats(stats);
         }
       } catch (error) {
         console.error('Failed to fetch mini stats:', error);
