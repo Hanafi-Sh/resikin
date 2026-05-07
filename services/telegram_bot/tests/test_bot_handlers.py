@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tests.conftest import DummyRepo, FakeMessage, FakeState
+from tests.conftest import DummyRepo, FakeCallback, FakeMessage, FakeState
 
 
 @pytest.mark.asyncio
@@ -137,6 +137,115 @@ async def test_photo_manual_valid_waste_keeps_user_category(bot_module, monkeypa
     assert state.data["photo_received"] is True
     assert state.data["photo_validated_as_waste"] is True
     assert state.state == bot_module.ReportStates.INPUT_DESKRIPSI.state
+
+
+@pytest.mark.asyncio
+async def test_additional_photo_before_description_is_kept(bot_module, monkeypatch):
+    photo = [SimpleNamespace(file_id="file-2")]
+    message = FakeMessage(photo=photo, user_id=8)
+    state = FakeState(
+        data={"category": "sampah_liar", "file_ids": ["file-1"]},
+        state=bot_module.ReportStates.INPUT_DESKRIPSI.state,
+    )
+
+    async def fake_validate(file_id, chat_id):
+        return {"accepted": True, "fallback": False, "ai_data": {"success": True, "isWaste": True}}
+
+    monkeypatch.setattr(bot_module, "validate_telegram_photo", fake_validate)
+
+    await bot_module.handle_additional_photo_before_description(message, state)
+
+    assert state.data["file_ids"] == ["file-1", "file-2"]
+    assert state.data["photo_received"] is True
+    assert state.state == bot_module.ReportStates.INPUT_DESKRIPSI.state
+    assert "total foto: 2" in message.answers[0]["text"].lower()
+
+
+@pytest.mark.asyncio
+async def test_description_requires_text(bot_module):
+    message = FakeMessage(photo=[SimpleNamespace(file_id="file-2")], user_id=8)
+    state = FakeState(data={"file_ids": ["file-1"]}, state=bot_module.ReportStates.INPUT_DESKRIPSI.state)
+
+    await bot_module.handle_description(message, state)
+
+    assert "deskripsi laporan" in message.answers[0]["text"].lower()
+    assert "description" not in state.data
+    assert state.state == bot_module.ReportStates.INPUT_DESKRIPSI.state
+
+
+@pytest.mark.asyncio
+async def test_description_requires_minimum_length(bot_module):
+    message = FakeMessage(text="pendek", user_id=8)
+    state = FakeState(state=bot_module.ReportStates.INPUT_DESKRIPSI.state)
+
+    await bot_module.handle_description(message, state)
+
+    assert "minimal 10 karakter" in message.answers[0]["text"].lower()
+    assert "description" not in state.data
+    assert state.state == bot_module.ReportStates.INPUT_DESKRIPSI.state
+
+
+@pytest.mark.asyncio
+async def test_confirm_with_short_description_keeps_draft_and_asks_description(bot_module, monkeypatch):
+    repo = DummyRepo()
+    monkeypatch.setattr(bot_module, "get_repo", lambda: repo)
+    state = FakeState(
+        data={
+            "reporter_id": "reporter-1",
+            "reporter_name": "Budi",
+            "reporter_phone": "08123456789",
+            "kelurahan_id": "kotabaru",
+            "category": "tps_penuh",
+            "file_ids": ["file-1"],
+            "photo_received": True,
+            "description": "pendek",
+            "latitude": -7.8,
+            "longitude": 110.4,
+        },
+        state=bot_module.ReportStates.KONFIRMASI.state,
+    )
+    call = FakeCallback(data="confirm:yes", user_id=8)
+
+    await bot_module.handle_confirm_manual(call, state)
+
+    assert repo.inserted_reports == []
+    assert state.cleared is False
+    assert state.state == bot_module.ReportStates.INPUT_DESKRIPSI.state
+    assert "minimal 10 karakter" in call.message.answers[0]["text"].lower()
+
+
+@pytest.mark.asyncio
+async def test_confirm_insert_error_keeps_draft(bot_module, monkeypatch, immediate_to_thread):
+    class FailingRepo(DummyRepo):
+        def insert_report(self, report):
+            self.inserted_reports.append(report)
+            raise RuntimeError("db rejected")
+
+    repo = FailingRepo()
+    monkeypatch.setattr(bot_module, "get_repo", lambda: repo)
+    state = FakeState(
+        data={
+            "reporter_id": "reporter-1",
+            "reporter_name": "Budi",
+            "reporter_phone": "08123456789",
+            "kelurahan_id": "kotabaru",
+            "category": "tps_penuh",
+            "file_ids": ["file-1"],
+            "photo_received": True,
+            "description": "Sampah menumpuk dekat pasar",
+            "latitude": -7.8,
+            "longitude": 110.4,
+        },
+        state=bot_module.ReportStates.KONFIRMASI.state,
+    )
+    call = FakeCallback(data="confirm:yes", user_id=8)
+
+    await bot_module.handle_confirm_manual(call, state)
+
+    assert len(repo.inserted_reports) == 1
+    assert state.cleared is False
+    assert state.state == bot_module.ReportStates.KONFIRMASI.state
+    assert "draft anda belum dihapus" in call.message.answers[0]["text"].lower()
 
 
 @pytest.mark.asyncio
