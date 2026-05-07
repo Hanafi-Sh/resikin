@@ -32,18 +32,38 @@ async function notifyBot(event, fields) {
 }
 
 /**
- * GET /api/reports — List semua laporan (untuk dashboard koordinator)
+ * GET /api/reports — List semua laporan (untuk dashboard koordinator) atau stats publik
  */
 export async function GET(request) {
   const supabase = await createClient();
+  const { searchParams } = new URL(request.url);
+  
+  // Public stats endpoint (no auth required)
+  if (searchParams.get('stats') === 'true') {
+    const { data, error } = await supabase
+      .from('reports')
+      .select('status', { count: 'exact' });
 
-  // Check auth
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const stats = { dikirim: 0, dalam_proses: 0, selesai: 0 };
+    data?.forEach((r) => {
+      if (r.status === 'dikirim' || r.status === 'diterima') stats.dikirim++;
+      if (r.status === 'ditugaskan' || r.status === 'dalam_proses') stats.dalam_proses++;
+      if (r.status === 'selesai') stats.selesai++;
+    });
+
+    return NextResponse.json(stats);
+  }
+
+  // Protected endpoint - requires auth
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
   const status = searchParams.get('status');
   const category = searchParams.get('category');
   const page = parseInt(searchParams.get('page') || '1');
