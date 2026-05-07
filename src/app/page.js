@@ -329,13 +329,13 @@ export default function HomePage() {
           ============================================ */}
       <section className="py-24 bg-background" id="telegram">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center">
+          <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center text-center md:text-left">
             <div>
               <span className="inline-flex items-center gap-2 text-lg font-semibold text-emerald-600 uppercase tracking-wider">
                 <Bot className="w-5 h-5" />
                 Bot Telegram
               </span>
-              <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-foreground">
+              <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-foreground leading-relaxed">
                 Laporkan Sampah lewat <span className="text-gradient">@{APP_CONFIG.telegramBotUsername}</span>
               </h2>
               <p className="mt-5 text-lg text-muted-foreground leading-relaxed">
@@ -387,7 +387,7 @@ export default function HomePage() {
                 const Icon = item.icon;
                 return (
                   <Card key={item.title} hover className="p-6">
-                    <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mb-4">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex mx-auto md:mx-0 items-center justify-center mb-4">
                       <Icon className="w-5 h-5 text-emerald-600 dark:text-emerald-300" />
                     </div>
                     <h3 className="text-base font-bold text-foreground mb-2">{item.title}</h3>
