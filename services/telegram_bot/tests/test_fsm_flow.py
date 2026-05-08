@@ -98,25 +98,27 @@ async def test_fsm_flow_happy_path_cancel(monkeypatch):
             "reporter_phone": "08123456789",
             "telegram_id": "1",
         },
-        state=ReportStates.PILIH_KELURAHAN.state,
+        state=ReportStates.UPLOAD_FOTO.state,
     )
-    assert await state.get_state() == ReportStates.PILIH_KELURAHAN.state
-
-    await bot_module.handle_kelurahan(FakeCallback(data="kel:kotabaru"), state)
-    assert await state.get_state() == ReportStates.PILIH_KATEGORI.state
-
-    await bot_module.handle_category(FakeCallback(data="cat:tps_penuh"), state)
     assert await state.get_state() == ReportStates.UPLOAD_FOTO.state
 
     photo = [SimpleNamespace(file_id="file-1", file_unique_id="fu-1", width=1, height=1, file_size=1)]
     await bot_module.handle_photo_manual(FakeMessage(photo=photo), state)
-    assert await state.get_state() == ReportStates.INPUT_DESKRIPSI.state
+    assert await state.get_state() == ReportStates.PILIH_KATEGORI.state
 
-    await bot_module.handle_description(FakeMessage(text="Ada sampah menumpuk"), state)
+    await bot_module.handle_category(FakeCallback(data="cat:tps_penuh"), state)
+    assert await state.get_state() == ReportStates.PILIH_KELURAHAN.state
+
+    await bot_module.handle_kelurahan(FakeCallback(data="kel:kotabaru"), state)
     assert await state.get_state() == ReportStates.SHARE_LOCATION.state
 
-    location = SimpleNamespace(latitude=-7.8, longitude=110.4)
-    await bot_module.handle_location(FakeMessage(location=location), state)
+    location_message = FakeMessage(location=SimpleNamespace(latitude=-7.8, longitude=110.4))
+    await bot_module.handle_location(location_message, state)
+    assert await state.get_state() == ReportStates.INPUT_DESKRIPSI.state
+    assert location_message.answers[0]["text"] == "Lokasi diterima."
+    assert "deskripsi lengkap" in location_message.answers[1]["text"].lower()
+
+    await bot_module.handle_description(FakeMessage(text="Ada sampah menumpuk"), state)
     assert await state.get_state() == ReportStates.KONFIRMASI.state
 
     await bot_module.handle_confirm_manual(FakeCallback(data="confirm:no"), state)

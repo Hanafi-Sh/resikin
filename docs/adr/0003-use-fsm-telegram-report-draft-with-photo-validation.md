@@ -10,4 +10,4 @@ Telegram Draf Laporan will be collected through an explicit FSM instead of an LL
 
 ## Consequences
 
-Bot deployment no longer requires `DEEPSEEK_API_KEY` or the OpenAI-compatible SDK. Pelapor input follows the explicit FSM order: phone, Kelurahan Laporan, category, Foto Laporan, description, location, and confirmation. If Validasi Foto Laporan returns `isWaste=false`, the photo is not accepted, but the Pelapor may continue without a photo. If Validasi Foto Laporan is unavailable, the bot accepts the photo so the Pelapor is not blocked by an external runtime failure.
+Bot deployment no longer requires `DEEPSEEK_API_KEY` or the OpenAI-compatible SDK. Pelapor input follows the explicit FSM order: phone, Foto Laporan, category, Kelurahan Laporan, location, description, and confirmation. Foto Laporan is collected early so Validasi Foto Laporan can suggest a category before the Pelapor chooses one. If Validasi Foto Laporan returns `isWaste=false`, the bot asks the Pelapor to confirm or resend the photo. If Validasi Foto Laporan is unavailable, the bot accepts the photo so the Pelapor is not blocked by an external runtime failure.

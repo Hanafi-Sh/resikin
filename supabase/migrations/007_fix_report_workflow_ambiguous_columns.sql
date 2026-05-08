@@ -1,6 +1,6 @@
 -- ============================================
--- ResikIn - Centralized Alur Penanganan Laporan
--- Run this AFTER 005_create_report_intake_function.sql
+-- ResikIn - Fix ambiguous column references in report workflow
+-- Run this AFTER 006_create_report_workflow_function.sql
 -- ============================================
 
 CREATE OR REPLACE FUNCTION apply_report_workflow(

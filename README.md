@@ -102,6 +102,7 @@ cp .env.local.example .env.local
 #   - supabase/migrations/003_telegram_linking_and_sectors.sql
 #   - supabase/migrations/005_create_report_intake_function.sql
 #   - supabase/migrations/006_create_report_workflow_function.sql
+#   - supabase/migrations/007_fix_report_workflow_ambiguous_columns.sql
 
 # 5. Run development server
 npm run dev
@@ -287,7 +288,7 @@ Jika muncul error `new row violates row-level security policy` saat petugas uplo
 
 ## 🤖 AI Services
 
-ResikIn menggunakan microservice AI terpisah untuk memvalidasi laporan dan memberikan rekomendasi penugasan. Kode sumber dan dokumentasi lengkap AI dapat ditemukan di folder [**`ai-integration/`**](ai-integration/README.md).
+ResikIn menggunakan microservice AI terpisah untuk memvalidasi laporan dan memberikan rekomendasi penugasan. Service ini dijalankan terpisah dari web app dan bot; dokumentasi di repo ini hanya mencatat kontrak endpoint yang dipakai ResikIn.
 
 | Area | Env | Fungsi |
 |------|-----|--------|
@@ -314,6 +315,7 @@ Menggunakan **Supabase** (PostgreSQL). File migration yang harus dijalankan:
 | `003_telegram_linking_and_sectors.sql` | Menambahkan tabel `sectors`, `sector_kelurahan`, dan tabel linking Telegram untuk koordinator/petugas |
 | `005_create_report_intake_function.sql` | Memusatkan pembuatan laporan baru, kode tracking, foto awal, dan status history awal dalam fungsi database |
 | `006_create_report_workflow_function.sql` | Memusatkan perubahan status, assignment, foto penyelesaian, dan status history alur penanganan laporan dalam fungsi database |
+| `007_fix_report_workflow_ambiguous_columns.sql` | Mengganti fungsi `apply_report_workflow` dengan referensi kolom yang eksplisit agar aksi petugas `dalam_proses` dan `selesai` tidak terkena error `column reference "report_id" is ambiguous` |
 
 > Jalankan di Supabase Dashboard → SQL Editor. Perhatikan dependensi: `004_reporters_and_categories.sql` membutuhkan fungsi `update_updated_at_column()` dari migration awal.
 > Urutan canonical juga dicatat di [`docs/database/migration-order.md`](docs/database/migration-order.md).

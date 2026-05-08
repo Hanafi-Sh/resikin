@@ -41,12 +41,12 @@ async def test_report_button_existing_user_enters_fsm_flow(
 
     await bot_module.handle_report_button(message, state)
 
-    assert state.state == bot_module.ReportStates.PILIH_KELURAHAN.state
+    assert state.state == bot_module.ReportStates.UPLOAD_FOTO.state
     assert bot_module.user_state[7]["file_ids"] == []
     assert bot_module.user_state[7]["suggested_category"] is None
     assert bot_module.user_state[7]["reporter_id"] == "reporter-1"
     assert bot_module.user_state[7]["reporter_phone"] == "08123"
-    assert "pilih kelurahan" in message.answers[0]["text"].lower()
+    assert "kirimkan foto" in message.answers[0]["text"].lower()
 
 
 @pytest.mark.asyncio
@@ -96,7 +96,7 @@ async def test_contact_updates_existing_reporter_and_enters_fsm(
 
     assert repo.updated_reporters == [("reporter-1", {"phone": "081234"})]
     assert state.data["reporter_phone"] == "081234"
-    assert state.state == bot_module.ReportStates.PILIH_KELURAHAN.state
+    assert state.state == bot_module.ReportStates.UPLOAD_FOTO.state
 
 
 @pytest.mark.asyncio
@@ -110,7 +110,7 @@ async def test_phone_text_is_accepted_and_enters_fsm(bot_module, monkeypatch, im
 
     assert repo.created_reporters[0]["phone"] == "08123456789"
     assert state.data["reporter_phone"] == "08123456789"
-    assert state.state == bot_module.ReportStates.PILIH_KELURAHAN.state
+    assert state.state == bot_module.ReportStates.UPLOAD_FOTO.state
 
 
 @pytest.mark.asyncio
@@ -136,7 +136,7 @@ async def test_photo_manual_valid_waste_keeps_user_category(bot_module, monkeypa
     assert state.data["suggested_category"] == "tps_penuh"
     assert state.data["photo_received"] is True
     assert state.data["photo_validated_as_waste"] is True
-    assert state.state == bot_module.ReportStates.INPUT_DESKRIPSI.state
+    assert state.state == bot_module.ReportStates.PILIH_KATEGORI.state
 
 
 @pytest.mark.asyncio
@@ -263,8 +263,8 @@ async def test_photo_manual_non_waste_is_rejected(bot_module, monkeypatch):
 
     assert state.data["file_ids"] == []
     assert state.data["photo_received"] is False
-    assert state.state is None
-    assert "belum terdeteksi" in message.answers[0]["text"].lower()
+    assert state.state == bot_module.ReportStates.KONFIRMASI_FOTO.state
+    assert "kemungkinan bukan sampah" in message.answers[0]["text"].lower()
 
 
 @pytest.mark.asyncio
@@ -284,7 +284,7 @@ async def test_photo_manual_validation_error_accepts_fallback(bot_module, monkey
     assert state.data["photo_received"] is True
     assert state.data["photo_validated_as_waste"] is False
     assert "tetap diterima" in message.answers[0]["text"].lower()
-    assert state.state == bot_module.ReportStates.INPUT_DESKRIPSI.state
+    assert state.state == bot_module.ReportStates.PILIH_KATEGORI.state
 
 
 @pytest.mark.asyncio
@@ -296,7 +296,7 @@ async def test_manual_photo_skip_and_required_location(bot_module):
 
     assert state.data["file_ids"] == []
     assert state.data["photo_declined"] is True
-    assert state.state == bot_module.ReportStates.INPUT_DESKRIPSI.state
+    assert state.state == bot_module.ReportStates.PILIH_KATEGORI.state
 
     state = FakeState(data={"file_ids": []}, state=bot_module.ReportStates.SHARE_LOCATION.state)
     bad_location = FakeMessage(text="lokasinya di dekat pasar")

@@ -174,11 +174,8 @@ async def test_notify_report_status_changed_sends_to_reporter(notification_fakes
 
     message = bot.messages[0]
     assert message["chat_id"] == 3001
-    assert "Status laporan Anda diperbarui." in message["text"]
-    assert "- Status: Dalam Proses" in message["text"]
-    assert "- Kode: RSK-001" in message["text"]
-    assert "- Kategori: tps_penuh" in message["text"]
-    assert "- Alamat: Pasar Kotabaru" in message["text"]
+    assert "Laporan Anda sedang dalam pengerjaan" in message["text"]
+    assert "Kode Laporan: RSK-001" in message["text"]
 
     button = message["reply_markup"].inline_keyboard[0][0]
     assert button.text == "Lacak Laporan"
@@ -252,8 +249,8 @@ async def test_notify_report_status_changed_rejected_includes_reason(notificatio
 
     assert response.status_code == 200
     assert response.json() == {"sent": 1, "recipients": 1}
-    assert "- Status: Ditolak" in bot.messages[0]["text"]
-    assert "- Alasan: Foto tidak jelas" in bot.messages[0]["text"]
+    assert "tidak dapat kami proses" in bot.messages[0]["text"]
+    assert "Alasan: Foto tidak jelas" in bot.messages[0]["text"]
 
 
 @pytest.mark.asyncio

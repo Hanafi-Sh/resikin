@@ -155,15 +155,15 @@ Syarat deterministik sebelum laporan disimpan:
 | Kategori | Harus salah satu kategori resmi |
 | Foto | Opsional, tetapi bot harus pernah menerima foto valid atau user eksplisit menolak foto |
 
-Foto dikirim ke AI microservice. Jika terdeteksi sampah, `file_id` disimpan. Jika terdeteksi spam/non-sampah, foto tidak dihitung sebagai bukti laporan dan bot meminta foto lain atau user boleh lanjut tanpa foto.
+Foto dikirim ke AI microservice. Jika terdeteksi sampah, `file_id` disimpan. Jika terdeteksi spam/non-sampah, bot meminta Pelapor mengonfirmasi apakah foto tetap ingin dipakai atau mengirim ulang foto yang lebih jelas. Pelapor juga bisa melewati foto secara eksplisit dengan mengetik `-`.
 
 FSM memakai state:
 
 ```txt
-INPUT_TELEPON -> PILIH_KELURAHAN -> PILIH_KATEGORI -> UPLOAD_FOTO -> INPUT_DESKRIPSI -> SHARE_LOCATION -> KONFIRMASI
+INPUT_TELEPON -> UPLOAD_FOTO -> PILIH_KATEGORI -> PILIH_KELURAHAN -> SHARE_LOCATION -> INPUT_DESKRIPSI -> KONFIRMASI
 ```
 
-Jika validasi foto gagal karena AI service tidak tersedia, bot tetap menerima foto agar Pelapor tidak terblokir.
+Foto diminta lebih awal supaya AI dapat memberi saran kategori. Jika validasi foto gagal karena AI service tidak tersedia, bot tetap menerima foto agar Pelapor tidak terblokir.
 
 ---
 
@@ -230,6 +230,7 @@ Pastikan migration SQL sudah dijalankan di Supabase SQL Editor **(secara berurut
 5. `supabase/migrations/003_telegram_linking_and_sectors.sql` — Linking Telegram koordinator/petugas dan sektor
 6. `supabase/migrations/005_create_report_intake_function.sql` — Fungsi database untuk membuat laporan baru, kode tracking, foto awal, dan status history awal
 7. `supabase/migrations/006_create_report_workflow_function.sql` — Fungsi database untuk perubahan status, assignment, foto penyelesaian, dan status history alur penanganan laporan
+8. `supabase/migrations/007_fix_report_workflow_ambiguous_columns.sql` — Perbaikan fungsi workflow agar aksi petugas `dalam_proses` dan `selesai` tidak terkena error kolom `report_id` ambigu
 
 > Buka Supabase Dashboard → SQL Editor → copy-paste isi file → Run.
 > Urutan canonical juga dicatat di [`../../docs/database/migration-order.md`](../../docs/database/migration-order.md).
@@ -349,6 +350,8 @@ Bot memerlukan beberapa migration yang membuat tabel/kolom berikut tersedia:
 
 Bot mengirim data laporan ke fungsi database `create_report_intake`. Fungsi ini menyimpan status awal `dikirim`, membuat kode tracking, dan membuat entry awal di `status_history` dengan catatan laporan dibuat melalui bot Telegram.
 
+Perubahan status laporan dari web memakai fungsi database `apply_report_workflow`. Migration `007_fix_report_workflow_ambiguous_columns.sql` harus sudah dijalankan pada database yang pernah menjalankan migration 006 versi lama; jika belum, petugas dapat melihat error `column reference "report_id" is ambiguous` saat menekan **Menuju / Sedang Dikerjakan** atau **Selesai**.
+
 ## 🧠 Validasi Foto & Guardrails
 
 Bot mengumpulkan Draf Laporan lewat FSM eksplisit. Validasi Foto Laporan memakai AI microservice, tetapi Python validator tetap menentukan apakah laporan boleh disimpan.
@@ -382,7 +385,7 @@ Handler foto mengunduh file dari Telegram, mengubahnya ke base64, lalu mengirim 
 }
 ```
 
-Jika `isWaste=true`, `file_id` disimpan dan kategori saran dicatat sebagai `suggested_category` tanpa menimpa kategori yang sudah dipilih Pelapor. Jika `isWaste=false`, foto tidak masuk `file_ids` dan bot meminta foto lain atau Pelapor boleh melewati foto. Jika AI service gagal, bot tetap menerima foto agar warga tidak terblokir total, tetapi validator tetap menjaga field wajib lain.
+Jika `isWaste=true`, `file_id` disimpan dan kategori saran dicatat sebagai `suggested_category` tanpa menimpa kategori yang sudah dipilih Pelapor. Jika `isWaste=false`, bot meminta konfirmasi: Pelapor bisa tetap memakai foto tersebut atau mengirim ulang. Jika AI service gagal, bot tetap menerima foto agar warga tidak terblokir total, tetapi validator tetap menjaga field wajib lain.
 
 ### Anti-Spam
 

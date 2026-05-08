@@ -692,8 +692,8 @@ async def handle_photo_skip(message: Message, state: FSMContext):
         "photo_declined": True,
         "photo_validated_as_waste": False,
     })
-    await message.answer("✅ Foto dilewati. Silakan ketik deskripsi laporan.")
-    await state.set_state(ReportStates.INPUT_DESKRIPSI)
+    await message.answer("✅ Foto dilewati.")
+    await _show_category_picker(message, state)
 
 @router.message(StateFilter(ReportStates.UPLOAD_FOTO), F.photo)
 async def handle_photo_manual(message: Message, state: FSMContext):
@@ -846,18 +846,14 @@ async def handle_location(message: Message, state: FSMContext):
     if not message.location:
         await message.answer("⚠️ Laporan tidak bisa dilanjutkan tanpa lokasi. Silakan tekan tombol '📍 Bagikan Lokasi Saat Ini' atau kirimkan via menu Lampiran (📎).")
         return
-
-    data = await state.get_data()
     
     await state.update_data(
         latitude=message.location.latitude,
         longitude=message.location.longitude,
     )
-    await message.answer("📝 Silakan ketik deskripsi lengkap laporan Anda (lokasi detail, ciri-ciri sampah, dll):", reply_markup=ReplyKeyboardRemove())
-    await state.set_state(ReportStates.INPUT_DESKRIPSI)
     await message.answer("Lokasi diterima.", reply_markup=ReplyKeyboardRemove())
-    await message.answer(summary, reply_markup=kb)
-    await state.set_state(ReportStates.KONFIRMASI)
+    await message.answer("📝 Silakan ketik deskripsi lengkap laporan Anda (lokasi detail, ciri-ciri sampah, dll):")
+    await state.set_state(ReportStates.INPUT_DESKRIPSI)
 
 @router.callback_query(StateFilter(ReportStates.KONFIRMASI), F.data.startswith("confirm:"))
 async def handle_confirm_manual(call: CallbackQuery, state: FSMContext):
